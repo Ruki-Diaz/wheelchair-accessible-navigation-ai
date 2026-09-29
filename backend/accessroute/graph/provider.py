@@ -5,6 +5,7 @@ import logging
 from typing import Optional
 import networkx as nx
 import osmnx as ox
+import requests.exceptions as _req_exc
 
 from accessroute.config import ACCESSIBILITY_NODE_TAGS, ACCESSIBILITY_WAY_TAGS
 from accessroute.graph.errors import (
@@ -14,6 +15,12 @@ from accessroute.graph.errors import (
 )
 from accessroute.graph.loader import validate_graph
 from accessroute.graph.region import BoundingBox
+
+# osmnx 2.x public exception classes (osmnx._errors is private but stable since 2.0.0).
+# InsufficientResponseError  — Overpass returned empty / too-few results.
+# ResponseStatusCodeError    — Overpass returned a non-2xx HTTP status.
+# These replace the pre-release EmptyOverpassResponse / Response200Error names.
+from osmnx._errors import InsufficientResponseError, ResponseStatusCodeError
 
 logger = logging.getLogger(__name__)
 
@@ -84,22 +91,31 @@ class OpenStreetMapGraphProvider(GraphProvider):
                 simplify=True,
                 retain_all=False,
             )
-        except ox._errors.EmptyOverpassResponse as exc:
+        except InsufficientResponseError as exc:
+            # Overpass returned an empty or insufficient result set:
+            # the queried area contains no walkable pedestrian ways.
             raise NoPedestrianNetworkError(
                 f"No pedestrian network found within requested region: {bbox.to_dict()}."
             ) from exc
-        except (ox._errors.Response200Error, TimeoutError, ConnectionError) as exc:
+        except (ResponseStatusCodeError, _req_exc.Timeout, _req_exc.ConnectionError) as exc:
+            # Non-2xx HTTP status from Overpass, or a network-level timeout / connection failure.
             raise NetworkDownloadError(
                 f"Failed to download network from OpenStreetMap/Overpass: {exc}"
             ) from exc
+        except _req_exc.RequestException as exc:
+            # Catch-all for any other requests-layer failure (SSL, too many redirects, etc.)
+            raise NetworkDownloadError(
+                f"OpenStreetMap network request failed: {exc}"
+            ) from exc
         except Exception as exc:
-            # Check for empty response or connection errors wrapped in other exceptions
+            # Last-resort: inspect message text for known failure patterns that
+            # may be wrapped in unexpected exception types across osmnx versions.
             msg = str(exc).lower()
-            if "empty" in msg or "no data" in msg:
+            if "empty" in msg or "no data" in msg or "insufficient" in msg:
                 raise NoPedestrianNetworkError(
                     f"No walkable paths found in region: {bbox.to_dict()}."
                 ) from exc
-            if "timeout" in msg or "connection" in msg:
+            if "timeout" in msg or "connection" in msg or "status code" in msg:
                 raise NetworkDownloadError(
                     f"OpenStreetMap query timed out or connection failed: {exc}"
                 ) from exc
