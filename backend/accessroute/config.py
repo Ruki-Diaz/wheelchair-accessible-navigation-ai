@@ -27,6 +27,18 @@ DEFAULT_CACHE_DIR: Path = (
     Path(_env_cache_dir) if _env_cache_dir else BASE_DIR / "data" / "cache"
 )
 
+# Overpass endpoint failover configuration.
+# ACCESSROUTE_OVERPASS_ENDPOINTS: comma-separated list of Overpass API base URLs,
+# tried in order on each cold graph acquisition.
+# Example:
+#   ACCESSROUTE_OVERPASS_ENDPOINTS=https://overpass-api.de/api,https://overpass.kumi.systems/api
+# When not set, three built-in public mirrors are used.
+DEFAULT_OVERPASS_ENDPOINTS: List[str] = [
+    "https://overpass-api.de/api",
+    "https://overpass.kumi.systems/api",
+    "https://overpass.private.coffee/api",
+]
+
 # Configured Geographic Areas (Stage 1 uses Vermont South test area)
 AREAS: Dict[str, GeographicArea] = {
     "vermont_south": GeographicArea(
