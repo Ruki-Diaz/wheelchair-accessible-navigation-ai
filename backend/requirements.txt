@@ -1,0 +1,12 @@
+# AccessRoute AI - Stage 1 Dependencies
+# Core spatial, graph, and routing libraries
+networkx>=3.2
+osmnx>=2.0.0
+geopandas>=1.0.0
+shapely>=2.0.0
+folium>=0.15.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Testing
+pytest>=8.0.0

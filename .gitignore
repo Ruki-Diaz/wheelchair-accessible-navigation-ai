@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing and Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# OSMnx and Graph Caches
+cache/
+backend/data/cache/*
+!backend/data/cache/.gitkeep
+
+# Development Generated Maps
+dev_maps/
+*_dev_map.html
+test_map.html
+
+# IDE and Operating System
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo

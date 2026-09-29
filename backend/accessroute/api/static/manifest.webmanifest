@@ -1,0 +1,68 @@
+{
+  "name": "AccessRoute AI",
+  "short_name": "AccessRoute",
+  "description": "Explainable, wheelchair-accessible pedestrian navigation with offline capability and field surveying.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1e3a8a",
+  "background_color": "#0f172a",
+  "categories": ["navigation", "travel", "utilities"],
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Navigate",
+      "short_name": "Navigate",
+      "description": "Plan and follow an accessible route",
+      "url": "/?action=navigate",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Report Accessibility Issue",
+      "short_name": "Report Issue",
+      "description": "Report a barrier, steps, or missing ramp",
+      "url": "/?action=report",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Verification Missions",
+      "short_name": "Missions",
+      "description": "Field survey mode to verify pedestrian infrastructure",
+      "url": "/?action=missions",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Saved Routes",
+      "short_name": "Saved Routes",
+      "description": "Access saved routes and places",
+      "url": "/?action=saved_routes",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

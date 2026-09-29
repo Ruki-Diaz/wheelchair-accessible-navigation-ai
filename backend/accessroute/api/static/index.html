@@ -1,0 +1,2001 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AccessRoute AI — Wheelchair-Accessible Pedestrian Navigation</title>
+  <meta name="description"
+    content="Explainable, accessibility-aware pedestrian navigation powered by OpenStreetMap and Copernicus DEM terrain intelligence.">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+  <!-- Modern Accessible Typography (Outfit & Inter) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- PWA Manifest & Mobile Web App Meta -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0E1513">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AccessRoute">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+  <link rel="stylesheet" href="/static/app.css?v=20260929_fix5">
+</head>
+
+<body>
+  <div class="app-container">
+
+    <!-- Floating Minimal Top Bar -->
+    <header class="floating-top-bar" role="banner">
+      <div class="top-bar-left">
+        <!-- Brand Pill with integrated connectivity indicator -->
+        <div class="brand-pill" id="brand-pill">
+          <span class="brand-icon" aria-hidden="true">♿</span>
+          <span class="brand-name">AccessRoute</span>
+          <span class="brand-badge">AI</span>
+          <!-- Stage 14 & Final: Global Connectivity Status Indicator -->
+          <div id="connectivity-pill" class="connectivity-pill online" role="status"
+            aria-label="System connection: Online">
+            <span id="connectivity-dot" class="connectivity-dot" aria-hidden="true"></span>
+            <span id="connectivity-text" class="connectivity-text">Online</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="top-bar-right">
+        <!-- Floating Mobility Profile Pill -->
+        <button type="button" id="floating-mobility-pill" class="floating-mobility-pill"
+          onclick="openPreferencesModal()" aria-haspopup="dialog" aria-controls="preferences-modal"
+          aria-label="Active mobility profile: Manual Wheelchair. Tap to adjust.">
+          <span id="floating-mobility-icon" class="mobility-pill-icon" aria-hidden="true">♿</span>
+          <span id="floating-mobility-label" class="mobility-pill-label">Manual Wheelchair</span>
+          <span class="mobility-pill-caret" aria-hidden="true">▾</span>
+        </button>
+
+        <!-- Consumer Saved & Offline Button -->
+        <button type="button" id="btn-top-saved" class="floating-saved-pill" onclick="openSavedManagerModal()"
+          aria-haspopup="dialog" aria-controls="saved-manager-modal" aria-label="Saved places and offline routes">
+          <span class="saved-pill-icon" aria-hidden="true">🔖</span>
+          <span class="saved-pill-label">Saved</span>
+        </button>
+
+        <!-- Stage 12 & 14: Anonymous Beta Device & Options (Preserved in DOM, hidden from consumer view) -->
+        <div class="user-account-nav" id="user-account-nav" style="display: none !important;" aria-hidden="true">
+          <button type="button" class="btn-account-pill" id="btn-auth-open" onclick="toggleAccountMenu()"
+            aria-label="Beta device and app options">
+            <span class="auth-icon" aria-hidden="true">📱</span>
+            <span class="auth-label" id="auth-nav-label">Beta</span>
+          </button>
+          <div class="user-dropdown-menu" id="user-dropdown-menu" hidden>
+            <div class="user-dropdown-header">
+              <span class="user-dropdown-email" id="dropdown-user-email">Beta Tester</span>
+              <span class="user-dropdown-badge" id="dropdown-user-badge">Local Mode</span>
+            </div>
+            <button type="button" class="user-dropdown-item" id="menu-btn-saved-places"
+              onclick="openSavedPlacesModal()">
+              <span>⭐ Saved Places</span>
+            </button>
+            <button type="button" class="user-dropdown-item" id="menu-btn-saved-routes"
+              onclick="openSavedRoutesModal()">
+              <span>🗺️ Saved Routes</span>
+            </button>
+            <hr class="user-dropdown-divider">
+            <!-- Stage 14 PWA & Field Survey Options -->
+            <button type="button" class="user-dropdown-item" id="menu-btn-field-survey" onclick="openFieldModeModal()">
+              <span>📋 Field Survey Mode</span>
+            </button>
+            <button type="button" class="user-dropdown-item" id="menu-btn-storage" onclick="openStorageManagerModal()">
+              <span>💾 Offline Data</span>
+            </button>
+            <button type="button" class="user-dropdown-item" id="menu-btn-install-pwa"
+              onclick="handlePWAInstallClick()">
+              <span>📲 Install AccessRoute</span>
+            </button>
+            <!-- Future Cloud Sync controls kept hidden during private beta -->
+            <div id="cloud-account-section" style="display: none;">
+              <hr class="user-dropdown-divider">
+              <button type="button" class="user-dropdown-item" id="menu-btn-sync-prefs"
+                onclick="handleManualSyncPreferences()">
+                <span>☁️ Sync Preferences</span>
+              </button>
+              <button type="button" class="user-dropdown-item text-danger" id="menu-btn-signout"
+                onclick="handleSignOut()">
+                <span>🚪 Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stage 14: PWA Install and Update Banners -->
+    <div id="pwa-install-banner" class="pwa-banner" hidden role="region" aria-label="Install AccessRoute Application">
+      <div class="pwa-banner-content">
+        <span class="pwa-banner-icon" aria-hidden="true">📲</span>
+        <div class="pwa-banner-text">
+          <strong>Install AccessRoute</strong>
+          <span>Use AccessRoute like an app and keep downloaded routes available offline.</span>
+        </div>
+      </div>
+      <div class="pwa-banner-actions">
+        <button type="button" class="btn btn-primary btn-sm" onclick="handlePWAInstallClick()">Install</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="handlePWADismissClick()">Not Now</button>
+      </div>
+    </div>
+
+    <div id="pwa-update-banner" class="pwa-update-banner" hidden role="alert">
+      <div class="pwa-update-text">
+        <span class="update-icon" aria-hidden="true">🔄</span>
+        <span>AccessRoute update available — A newer version is ready.</span>
+      </div>
+      <div class="pwa-update-actions">
+        <button type="button" class="btn btn-sm btn-primary" onclick="handleApplyAppUpdate()">Update Now</button>
+        <button type="button" class="dialog-close-btn" onclick="handleDismissAppUpdate()"
+          aria-label="Dismiss update">✕</button>
+      </div>
+    </div>
+
+    <!-- Main Navigation Interface -->
+    <div class="workspace-layout">
+
+      <!-- Primary Side Navigation / Bottom Sheet Panel -->
+      <aside id="side-drawer" class="drawer-panel" role="region" aria-label="Route Planning and Guidance">
+
+        <!-- Mobile Bottom Sheet Drag Handle -->
+        <div class="drag-handle" id="bottom-sheet-handle" aria-hidden="true">
+          <div class="drag-bar"></div>
+        </div>
+
+        <!-- Resting Search Bar Trigger (Progressive Disclosure) -->
+        <div id="search-bar-resting" class="search-bar-resting" onclick="expandSearchDrawer()" role="button"
+          tabindex="0" aria-label="Search destination" aria-expanded="false">
+          <div class="search-resting-inner">
+            <span class="search-resting-icon" aria-hidden="true">🔍</span>
+            <span class="search-resting-text" id="search-resting-placeholder">Where are you going?</span>
+          </div>
+        </div>
+
+        <!-- Search Form Card (Expanded State) -->
+        <section id="search-card-expanded" class="search-card" aria-label="Search and destination" hidden>
+          <div class="search-card-header">
+            <div class="search-card-title-group">
+              <span class="search-card-eyebrow">ROUTE PLANNING</span>
+              <h2 class="search-card-title">Where to?</h2>
+            </div>
+            <button type="button" class="btn-collapse-search" onclick="collapseSearchDrawer()"
+              aria-label="Collapse search">
+              ✕
+            </button>
+          </div>
+
+          <form id="route-form" onsubmit="event.preventDefault(); handleFindRoutes();">
+            <div class="inputs-container">
+              <!-- Origin Input -->
+              <div class="location-row" style="position: relative;">
+                <span class="pin-icon pin-origin" title="Starting point" aria-hidden="true">●</span>
+                <div class="input-col">
+                  <div class="input-with-actions">
+                    <label for="origin-input" class="sr-only">Starting point</label>
+                    <input type="text" id="origin-input" class="place-input"
+                      placeholder="Search start location, use GPS, or drop pin..." autocomplete="off"
+                      aria-autocomplete="list" aria-controls="origin-candidates" />
+                    <button type="button" class="input-clear-btn" id="btn-clear-origin" onclick="handleClearOrigin()"
+                      title="Clear starting location" aria-label="Clear starting location" hidden>✕</button>
+                  </div>
+                  <div id="origin-coords-label" class="coords-display">Not selected</div>
+                  <ul id="origin-candidates" class="autocomplete-dropdown" role="listbox"
+                    aria-label="Origin Suggestions" hidden></ul>
+                </div>
+                <div class="location-btn-group">
+                  <button type="button" class="tool-btn" id="btn-my-location" onclick="handleUseMyLocation()"
+                    title="Use Current GPS Location" aria-label="Use browser geolocation for starting point">
+                    🧭
+                  </button>
+                  <button type="button" class="tool-btn" id="btn-pick-origin" title="Select start on map"
+                    aria-label="Drop pin for starting point">
+                    📍
+                  </button>
+                </div>
+              </div>
+
+              <!-- Swap Origin / Destination Button -->
+              <div class="swap-divider">
+                <div class="divider-line"></div>
+                <button type="button" class="swap-btn" id="btn-swap" onclick="handleSwapEndpoints()"
+                  title="Swap start and destination" aria-label="Swap starting point and destination">
+                  ⇅
+                </button>
+                <div class="divider-line"></div>
+              </div>
+
+              <!-- Destination Input -->
+              <div class="location-row" style="position: relative;">
+                <span class="pin-icon pin-dest" title="Destination" aria-hidden="true">■</span>
+                <div class="input-col">
+                  <div class="input-with-actions">
+                    <label for="destination-input" class="sr-only">Destination</label>
+                    <input type="text" id="destination-input" class="place-input"
+                      placeholder="Search destination or drop pin..." autocomplete="off" aria-autocomplete="list"
+                      aria-controls="dest-candidates" />
+                    <button type="button" class="input-clear-btn" id="btn-clear-dest" onclick="handleClearDestination()"
+                      title="Clear destination" aria-label="Clear destination" hidden>✕</button>
+                  </div>
+                  <div id="dest-coords-label" class="coords-display">Not selected</div>
+                  <ul id="dest-candidates" class="autocomplete-dropdown" role="listbox"
+                    aria-label="Destination Suggestions" hidden></ul>
+                </div>
+                <div class="location-btn-group">
+                  <button type="button" class="tool-btn" id="btn-save-destination"
+                    onclick="promptSaveCurrentDestination()" title="Save this place"
+                    aria-label="Save current destination to account" hidden>
+                    ⭐
+                  </button>
+                  <button type="button" class="tool-btn" id="btn-pick-dest" title="Select destination on map"
+                    aria-label="Drop pin for destination">
+                    🎯
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Example Test Locations (Subtle developer / tester disclosure) -->
+            <details class="example-locations-disclosure" id="example-locations-disclosure">
+              <summary class="example-locations-summary">
+                <span class="summary-icon">📍</span>
+                <span class="summary-text">Example test locations</span>
+                <span class="summary-chevron" aria-hidden="true">▾</span>
+              </summary>
+              <div class="presets-scroll-group" aria-label="City presets">
+                <button type="button" class="preset-pill" onclick="loadPreset('melbourne')">Melbourne CBD</button>
+                <button type="button" class="preset-pill" onclick="loadPreset('sydney')">Sydney Harbour</button>
+                <button type="button" class="preset-pill" onclick="loadPreset('london')">London West End</button>
+                <button type="button" class="preset-pill" onclick="loadPreset('vermont_south')">Vermont South</button>
+              </div>
+            </details>
+
+            <!-- Stage 8: Mobility Preferences Summary (Consumer Hierarchy) -->
+            <div class="preferences-summary-card" id="pref-summary-card" onclick="openPreferencesModal()" role="button"
+              tabindex="0" aria-label="Active mobility profile. Tap to adjust.">
+              <div class="pref-summary-header">
+                <div class="pref-title-group">
+                  <span class="pref-icon" id="pref-summary-icon" aria-hidden="true">♿</span>
+                  <div class="pref-name-stack">
+                    <span class="preset-badge" id="pref-active-preset-badge">Manual Wheelchair</span>
+                    <span class="pref-subtext">Accessibility preferences ›</span>
+                  </div>
+                </div>
+                <button type="button" class="btn-pref-edit" id="btn-open-preferences"
+                  onclick="event.stopPropagation(); openPreferencesModal()" aria-haspopup="dialog"
+                  aria-controls="preferences-modal" aria-label="Edit mobility preferences">
+                  Edit
+                </button>
+              </div>
+              <!-- Plain-language characteristics -->
+              <div class="pref-plain-bullets" id="pref-plain-bullets">
+                <span class="plain-bullet">✓ Step-free</span>
+                <span class="plain-bullet">✓ Avoids difficult surfaces</span>
+                <span class="plain-bullet">✓ Prefers gentler slopes</span>
+              </div>
+              <!-- Preserved technical chips in DOM for tests / advanced inspection -->
+              <div class="pref-chips-list" id="pref-chips-list" style="display: none;" aria-hidden="true">
+                <span class="pref-chip" id="chip-steps">♿ Stairs: Never</span>
+                <span class="pref-chip" id="chip-slope">↗ Slope: ≤4% (Max 8%)</span>
+                <span class="pref-chip" id="chip-surface">🛣 Unpaved: Avoid</span>
+                <span class="pref-chip" id="chip-kerb">↔ Kerbs: Avoid raised</span>
+                <span class="pref-chip" id="chip-confidence">ℹ Data: Balanced</span>
+              </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="action-row">
+              <button type="submit" id="btn-find" class="btn btn-primary">
+                Find Accessible Routes
+              </button>
+              <button type="button" id="btn-clear" class="btn btn-ghost" onclick="handleReset()">
+                Clear
+              </button>
+            </div>
+          </form>
+
+          <!-- Interactive Pin Dropping Notification -->
+          <div id="pin-mode-banner" class="pin-banner" hidden>
+            <span id="pin-mode-text">Click anywhere on the map to set location</span>
+            <button type="button" class="banner-close" onclick="cancelPinMode()"
+              aria-label="Cancel pin dropping">Cancel</button>
+          </div>
+        </section>
+
+        <!-- Live Calculation Progress States -->
+        <div id="status-card" class="status-card" role="status" aria-live="polite" hidden>
+          <div class="progress-spinner" aria-hidden="true"></div>
+          <div class="status-text-group">
+            <h2 id="status-headline" class="status-headline">Finding Accessible Paths...</h2>
+            <p id="status-detail" class="status-detail">Acquiring OpenStreetMap pedestrian data and checking terrain.
+            </p>
+          </div>
+        </div>
+
+        <!-- Preference Conflict Notification Card -->
+        <section id="conflict-card" class="conflict-card" role="alert" aria-live="assertive" hidden>
+          <div class="conflict-header">
+            <span class="conflict-icon" aria-hidden="true">⚠️</span>
+            <div class="conflict-title-wrap">
+              <h2 class="conflict-title">No Route Matches Strict Constraints</h2>
+              <p class="conflict-subtitle">AccessRoute did not find a connected route satisfying all your selected hard
+                avoidance rules within the searched area.</p>
+            </div>
+          </div>
+          <div class="conflict-reasons">
+            <h3 class="conflict-reasons-title">Identified Blocking Conditions:</h3>
+            <ul id="conflict-reasons-list" class="conflict-reasons-list">
+              <!-- Populated dynamically -->
+            </ul>
+          </div>
+          <p class="conflict-note">
+            To protect your safety and mobility choices, AccessRoute never silently weakens your strict constraints
+            without your explicit direction.
+          </p>
+          <div class="conflict-actions">
+            <button type="button" class="btn btn-primary btn-sm" onclick="openPreferencesModal()">
+              Adjust Mobility Preferences
+            </button>
+          </div>
+        </section>
+
+        <!-- Offline Route Search Notice Card (Section 2 & 20) -->
+        <section id="offline-search-card" class="conflict-card offline-search-card" role="alert" aria-live="assertive"
+          hidden>
+          <div class="conflict-header">
+            <span class="conflict-icon" aria-hidden="true">📡</span>
+            <div class="conflict-title-wrap">
+              <h2 class="conflict-title">You're offline</h2>
+              <p class="conflict-subtitle">New accessible routes require an internet connection. This route isn't
+                available offline yet.</p>
+            </div>
+          </div>
+          <div class="conflict-actions" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="openSavedManagerModal('downloaded')">
+              📥 View Downloaded Routes
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openSavedManagerModal('places')">
+              📍 Saved Places
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="handleFindRoutes()">
+              Retry When Online
+            </button>
+          </div>
+        </section>
+
+        <!-- Stage 12: Destination Accessibility Assessment Summary Card (Preserved) -->
+        <section id="dest-summary-card" class="dest-summary-card" aria-label="Destination Accessibility Assessment"
+          hidden>
+          <div class="dest-summary-header">
+            <span class="dest-summary-eyebrow">DESTINATION</span>
+            <div class="dest-summary-title-row">
+              <h2 id="dest-summary-name" class="dest-summary-name">Selected Location</h2>
+              <span id="dest-summary-status-pill" class="dest-status-pill pill-matched">✓ Matching preferences</span>
+            </div>
+            <p id="dest-summary-address" class="dest-summary-address">Coordinates or resolved address</p>
+          </div>
+
+          <div class="dest-metrics-bar">
+            <div class="dest-metric">
+              <span class="dest-metric-val" id="dest-metric-dist">—</span>
+              <span class="dest-metric-lbl">Distance</span>
+            </div>
+            <div class="dest-metric-divider"></div>
+            <div class="dest-metric">
+              <span class="dest-metric-val" id="dest-metric-time">—</span>
+              <span class="dest-metric-lbl">Estimated Time</span>
+            </div>
+            <div class="dest-metric-divider"></div>
+            <div class="dest-metric">
+              <span class="dest-metric-val" id="dest-metric-slope">—</span>
+              <span class="dest-metric-lbl">Max Grade</span>
+            </div>
+          </div>
+
+          <div class="dest-evidence-box">
+            <h3 class="dest-evidence-title">Route Accessibility Evidence:</h3>
+            <ul id="dest-evidence-checklist" class="dest-evidence-checklist">
+              <!-- Dynamically populated evidence statements -->
+            </ul>
+          </div>
+
+          <!-- Stage 13: Venue Entrance Intelligence Section -->
+          <div id="dest-entrance-box" class="dest-entrance-box" hidden>
+            <div class="dest-entrance-header">
+              <span class="dest-entrance-eyebrow">ENTRANCE</span>
+              <button type="button" class="btn btn-ghost btn-xs" id="btn-toggle-entrances"
+                onclick="toggleEntranceOptionsList()" aria-expanded="false"
+                aria-controls="dest-entrance-options-container">
+                Change Entrance ▾
+              </button>
+            </div>
+            <div class="dest-entrance-name" id="dest-entrance-name">Selected Entrance</div>
+            <div class="dest-entrance-status-tag" id="dest-entrance-status-tag">
+              <!-- Populated dynamically -->
+            </div>
+            <ul id="dest-entrance-checklist" class="dest-entrance-checklist">
+              <!-- Populated dynamically -->
+            </ul>
+
+            <!-- Multiple Entrance Options List -->
+            <div id="dest-entrance-options-container" class="entrance-options-container" hidden>
+              <div style="font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Available Entrance
+                Options:</div>
+              <div id="dest-entrance-options-list" class="entrance-options-list" role="listbox"
+                aria-label="Available Entrances">
+                <!-- Dynamically populated options -->
+              </div>
+              <div style="display: flex; gap: 6px; margin-top: 6px;">
+                <button type="button" class="btn btn-ghost btn-xs" onclick="useOriginalDestinationPoint()"
+                  style="font-size: 0.75rem;">
+                  Use Original Center Point
+                </button>
+                <button type="button" class="btn btn-ghost btn-xs" id="btn-save-preferred-entrance"
+                  onclick="saveActivePreferredEntrance()" style="font-size: 0.75rem;" hidden>
+                  ★ Save as Preferred
+                </button>
+                <button type="button" class="btn btn-ghost btn-xs" onclick="promptReportActiveEntrance()"
+                  style="font-size: 0.75rem;">
+                  📢 Report Issue
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dest-actions-row">
+            <button type="button" id="btn-dest-summary-find" class="btn btn-secondary btn-sm"
+              onclick="handleFindRoutes()">
+              Recalculate
+            </button>
+            <button type="button" id="btn-dest-summary-nav" class="btn btn-nav-primary btn-sm"
+              onclick="startNavigationForActiveRoute()">
+              <span aria-hidden="true">🧭</span> Start Navigation
+            </button>
+          </div>
+        </section>
+
+        <!-- Routes & Guidance Container (Phase 3/4 Redesign) -->
+        <div id="routes-container" class="routes-container" hidden>
+
+          <!-- Results Top Navigation Header -->
+          <div class="results-header-bar">
+            <button type="button" class="btn-back-search" onclick="backToSearch()"
+              aria-label="Edit route endpoints and preferences">
+              <span class="back-arrow" aria-hidden="true">←</span> <span>Edit Route</span>
+            </button>
+            <span class="results-count-badge" id="alternatives-count-badge">3 Options</span>
+          </div>
+
+          <!-- Hero Selected Route Card (Primary Consumer Experience) -->
+          <section id="active-route-hero" class="active-route-hero" aria-label="Selected Route Overview">
+            <!-- Dynamically populated via renderHeroRoute() -->
+          </section>
+
+          <!-- Alternative Routes Comparison List -->
+          <section class="alternatives-comparison-section" id="alternatives-comparison-section"
+            aria-label="Route alternatives">
+            <div class="alternatives-title-row">
+              <h3 class="alternatives-title">Route Alternatives</h3>
+              <span class="alternatives-hint">Tap to preview on map</span>
+            </div>
+
+            <!-- Dynamic Route Cards List -->
+            <div id="route-cards-list" class="route-cards-list" role="tablist" aria-label="Route Options">
+              <!-- Populated dynamically via JavaScript -->
+            </div>
+          </section>
+
+          <!-- Preserved Deep Details & Engineering Tabs (Secondary Disclosure) -->
+          <details class="technical-details-disclosure" id="technical-details-disclosure">
+            <summary class="technical-disclosure-summary">
+              <span class="summary-text">📐 Turn-by-Turn Directions & Elevation Graph</span>
+              <span class="disclosure-chevron" aria-hidden="true">▾</span>
+            </summary>
+
+            <section id="route-details-panel" class="details-panel" aria-label="Selected route navigation details">
+              <!-- Stage 11 & 14: Secondary Navigation & Offline Download Banner -->
+              <div class="nav-start-banner">
+                <button type="button" id="btn-disclosure-start-navigation" class="btn btn-nav-primary"
+                  onclick="startNavigationForActiveRoute()" aria-label="Start Live GPS Navigation">
+                  <span class="nav-btn-icon" aria-hidden="true">🧭</span>
+                  <span class="nav-btn-text">Start Navigation</span>
+                </button>
+                <button type="button" id="btn-download-offline-route"
+                  class="btn btn-outline btn-sm btn-offline-download" onclick="handleDownloadActiveRouteOffline()"
+                  aria-label="Download route for offline use">
+                  <span class="offline-btn-icon" aria-hidden="true">📥</span>
+                  <span id="download-offline-text">Download for Offline</span>
+                </button>
+              </div>
+              <div id="offline-route-status-badge" class="offline-status-cue" hidden role="status" aria-live="polite">
+                <span class="offline-cue-icon" aria-hidden="true">✓</span>
+                <div class="offline-cue-text">
+                  <strong id="offline-route-status-title">Route Available Offline</strong>
+                  <span id="offline-route-status-msg">Accessibility evidence and maneuvers saved.</span>
+                </div>
+              </div>
+
+              <!-- Navigation Tab Strip -->
+              <div class="tab-strip" role="tablist" aria-label="Route Inspection Tabs">
+                <button type="button" class="tab-btn active" role="tab" id="tab-btn-directions" aria-selected="true"
+                  aria-controls="tab-pane-directions" onclick="switchDetailTab('directions')">
+                  Directions
+                </button>
+                <button type="button" class="tab-btn" role="tab" id="tab-btn-elevation" aria-selected="false"
+                  aria-controls="tab-pane-elevation" onclick="switchDetailTab('elevation')">
+                  Elevation
+                </button>
+                <button type="button" class="tab-btn" role="tab" id="tab-btn-why" aria-selected="false"
+                  aria-controls="tab-pane-why" onclick="switchDetailTab('why')">
+                  Why This Route?
+                </button>
+                <button type="button" class="tab-btn" role="tab" id="tab-btn-evidence" aria-selected="false"
+                  aria-controls="tab-pane-evidence" onclick="switchDetailTab('evidence')">
+                  Evidence Quality
+                </button>
+              </div>
+
+              <!-- Tab 1: Turn-by-Turn Directions -->
+              <div id="tab-pane-directions" class="tab-pane active" role="tabpanel"
+                aria-labelledby="tab-btn-directions">
+                <div class="directions-header">
+                  <span class="directions-summary" id="directions-summary-text">Follow step-by-step guidance
+                    below:</span>
+                </div>
+                <ol id="directions-list" class="directions-steps-list">
+                  <!-- Populated via JS -->
+                </ol>
+              </div>
+
+              <!-- Tab 2: Interactive Elevation Profile -->
+              <div id="tab-pane-elevation" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-elevation" hidden>
+                <div class="elevation-stats-grid">
+                  <div class="elev-stat-card">
+                    <span class="elev-stat-val" id="elev-gain-val">+0 m</span>
+                    <span class="elev-stat-lbl">Elevation Climb</span>
+                  </div>
+                  <div class="elev-stat-card">
+                    <span class="elev-stat-val" id="elev-loss-val">-0 m</span>
+                    <span class="elev-stat-lbl">Elevation Descent</span>
+                  </div>
+                  <div class="elev-stat-card">
+                    <span class="elev-stat-val" id="elev-max-grade-val">0.0%</span>
+                    <span class="elev-stat-lbl">Max Est. Slope</span>
+                  </div>
+                </div>
+
+                <!-- SVG Interactive Elevation Profile Chart -->
+                <div class="chart-container">
+                  <div class="chart-header">
+                    <span class="chart-title">Elevation vs. Distance</span>
+                    <span id="chart-hover-indicator" class="chart-hover-readout">Hover chart to inspect location</span>
+                  </div>
+                  <div class="chart-wrapper" id="elevation-chart-wrapper">
+                    <svg id="elevation-svg" viewBox="0 0 500 160" preserveAspectRatio="none" role="img"
+                      aria-label="Route elevation graph"></svg>
+                  </div>
+                  <p class="terrain-disclaimer">
+                    Slope grades are estimates derived from Copernicus GLO-30 DEM. Micro-topography and building ramps
+                    may vary.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Tab 3: "Why This Route?" Deterministic Explainability -->
+              <div id="tab-pane-why" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-why" hidden>
+                <div class="explainability-box">
+                  <div class="explain-category">
+                    <h3 class="category-heading">Accessibility Findings & Trade-offs</h3>
+                    <ul id="why-findings-list" class="explain-list">
+                      <!-- Populated via JS -->
+                    </ul>
+                  </div>
+
+                  <div class="explain-category">
+                    <h3 class="category-heading">Data Confidence & Missingness</h3>
+                    <ul id="why-confidence-list" class="explain-list">
+                      <!-- Populated via JS -->
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 4: Stage 10 Route Evidence Quality -->
+              <div id="tab-pane-evidence" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-evidence" hidden>
+                <div class="explainability-box">
+                  <div class="evidence-quality-header">
+                    <h3 class="category-heading">Route Evidence Quality</h3>
+                    <p class="terrain-disclaimer" style="margin-top: 4px; margin-bottom: 12px;">
+                      Describes observational backing and data completeness across mapped infrastructure, Copernicus DEM
+                      terrain, and community evidence. This reflects data confidence, not probability of accessibility.
+                    </p>
+                  </div>
+
+                  <!-- Three-segment Evidence Quality Bar -->
+                  <div class="evidence-bar-container" aria-label="Evidence completeness bar">
+                    <div class="evidence-bar-segment segment-strong" id="eq-bar-strong" style="width: 0%;"
+                      title="Strong evidence"></div>
+                    <div class="evidence-bar-segment segment-partial" id="eq-bar-partial" style="width: 0%;"
+                      title="Partial evidence"></div>
+                    <div class="evidence-bar-segment segment-limited" id="eq-bar-limited" style="width: 100%;"
+                      title="Limited evidence"></div>
+                  </div>
+                  <div class="evidence-bar-legend">
+                    <div class="bar-legend-item"><span class="legend-swatch swatch-strong"></span> Strong: <strong
+                        id="eq-pct-strong">0%</strong></div>
+                    <div class="bar-legend-item"><span class="legend-swatch swatch-partial"></span> Partial: <strong
+                        id="eq-pct-partial">0%</strong></div>
+                    <div class="bar-legend-item"><span class="legend-swatch swatch-limited"></span> Limited: <strong
+                        id="eq-pct-limited">100%</strong></div>
+                  </div>
+
+                  <!-- Detailed Breakdown Cards -->
+                  <div class="elevation-stats-grid" style="margin-top: 12px; margin-bottom: 12px;">
+                    <div class="elev-stat-card">
+                      <span class="elev-stat-val" id="eq-community-count">0</span>
+                      <span class="elev-stat-lbl">Community Observations</span>
+                    </div>
+                    <div class="elev-stat-card">
+                      <span class="elev-stat-val" id="eq-conflicts-count">0</span>
+                      <span class="elev-stat-lbl">Evidence Conflicts</span>
+                    </div>
+                    <div class="elev-stat-card">
+                      <span class="elev-stat-val" id="eq-stale-count">0</span>
+                      <span class="elev-stat-lbl">Stale Observations</span>
+                    </div>
+                  </div>
+
+                  <!-- Important Verification Gaps -->
+                  <div class="explain-category">
+                    <h4 class="category-heading">Notable Verification Gaps</h4>
+                    <ul id="eq-gaps-list" class="explain-list">
+                      <!-- Populated dynamically -->
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+            </section>
+          </details>
+
+          <!-- Drawer Footer Telemetry -->
+          <footer class="drawer-footer" id="drawer-telemetry">
+            <!-- Region, Cache & Expansion details -->
+          </footer>
+        </div>
+
+      </aside>
+
+      <!-- Interactive Map Canvas -->
+      <main class="map-view" role="main" aria-label="Navigation Map">
+        <div id="map" class="map-canvas" tabindex="0" aria-label="Interactive route map"></div>
+        <canvas id="offline-nav-canvas" class="offline-nav-canvas" hidden
+          aria-label="Offline Navigation Canvas"></canvas>
+
+        <!-- Subtle Floating Offline Map Notice (Section 9) -->
+        <div id="offline-map-notice" class="offline-map-notice" hidden role="status">
+          <span class="notice-icon" aria-hidden="true">📡</span>
+          <span class="notice-text">Map imagery unavailable offline · Navigation is continuing using your downloaded
+            route.</span>
+        </div>
+
+        <!-- Floating Map Controls with Compact Layers Menu -->
+        <div class="map-floating-controls" aria-label="Map actions">
+          <button type="button" class="map-action-btn" id="btn-map-layers" onclick="toggleMapLayersMenu()"
+            title="Map Layers & Views" aria-label="Map layers and modes" aria-expanded="false"
+            aria-controls="map-layers-menu">
+            🗺️
+          </button>
+          <button type="button" class="map-action-btn" id="btn-report-issue" onclick="openCommunityReportSheet()"
+            title="Report Accessibility Issue" aria-label="Report accessibility issue">
+            ⚑
+          </button>
+          <button type="button" class="map-action-btn" id="btn-floating-location" onclick="handleUseMyLocation()"
+            title="Current GPS Location" aria-label="My current location">
+            🧭
+          </button>
+          <button type="button" class="map-action-btn" id="btn-fit-route" onclick="fitRouteBounds()"
+            title="Fit route in view" aria-label="Zoom to fit route">
+            ⛶
+          </button>
+        </div>
+
+        <!-- Subtle Floating Report Action (Section 3) -->
+        <div class="floating-report-container" id="floating-report-container">
+          <button type="button" class="btn-floating-report" id="btn-floating-report"
+            onclick="openCommunityReportSheet()" aria-label="Report accessibility condition">
+            <span class="floating-report-icon" aria-hidden="true">⚑</span>
+            <span class="floating-report-text">Report</span>
+          </button>
+        </div>
+
+        <!-- Stage 10: Secondary Specialist Map Layers Popover Menu (Preserves all functional IDs & Handlers) -->
+        <div id="map-layers-menu" class="map-layers-menu" hidden role="menu" aria-label="Map Visualization Layers">
+          <div class="map-layers-header">
+            <span class="map-layers-title">Map Layers</span>
+            <button type="button" class="map-layers-close" onclick="toggleMapLayersMenu(false)"
+              aria-label="Close layers menu">✕</button>
+          </div>
+          <div class="map-layers-list">
+            <button type="button" class="mode-btn active" id="btn-mode-nav"
+              onclick="switchMapMode('navigation'); toggleMapLayersMenu(false);">
+              <span class="mode-icon">🧭</span> Navigation Mode
+            </button>
+            <button type="button" class="mode-btn" id="btn-mode-coverage"
+              onclick="switchMapMode('coverage'); toggleMapLayersMenu(false);">
+              <span class="mode-icon">📊</span> Data Coverage
+            </button>
+            <button type="button" class="mode-btn" id="btn-mode-community"
+              onclick="switchMapMode('community'); toggleMapLayersMenu(false);">
+              <span class="mode-icon">📢</span> Community Reports
+            </button>
+            <button type="button" class="mode-btn" id="btn-mode-missions"
+              onclick="switchMapMode('missions'); toggleMapLayersMenu(false);">
+              <span class="mode-icon">🎯</span> Verification Needed
+            </button>
+          </div>
+        </div>
+
+    <!-- Stage 10: Data Coverage Legend -->
+    <div id="coverage-legend" class="map-legend-card" hidden>
+      <div class="legend-title">Regional Accessibility Coverage</div>
+      <div class="legend-stats" id="coverage-summary-stats">Calculating...</div>
+      <div class="legend-items">
+        <div class="legend-item"><span class="legend-swatch swatch-high"></span> High metadata coverage (≥75%)</div>
+        <div class="legend-item"><span class="legend-swatch swatch-med"></span> Limited metadata coverage (40–74%)</div>
+        <div class="legend-item"><span class="legend-swatch swatch-low"></span> Verification needed (&lt;40%)</div>
+      </div>
+    </div>
+
+    <!-- Segment Evidence Inspector Dialog Overlay -->
+    <section id="segment-inspector" class="inspector-dialog" role="dialog" aria-label="Segment Details" hidden>
+      <header class="inspector-dialog-header">
+        <h3 class="inspector-dialog-title">Path Segment Evidence</h3>
+        <button type="button" class="dialog-close-btn" onclick="closeSegmentInspector()"
+          aria-label="Close segment details">✕</button>
+      </header>
+      <div id="inspector-dialog-body" class="inspector-dialog-body">
+        <!-- Populated on segment click -->
+      </div>
+    </section>
+
+    <!-- Stage 10: Verification Mission Inspector Overlay -->
+    <section id="mission-inspector" class="inspector-dialog mission-dialog" role="dialog"
+      aria-label="Verification Mission" hidden>
+      <header class="inspector-dialog-header">
+        <h3 class="inspector-dialog-title" id="mission-inspector-title">Verification Mission</h3>
+        <button type="button" class="dialog-close-btn" onclick="closeMissionInspector()"
+          aria-label="Close mission details">✕</button>
+      </header>
+      <div id="mission-inspector-body" class="inspector-dialog-body">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- STAGE 11: LIVE GPS NAVIGATION HUD & CONTROLS                        -->
+    <!-- =================================================================== -->
+
+    <!-- Top Maneuver HUD Card (Glanceable Consumer Navigation) -->
+    <div id="nav-top-hud" class="nav-top-hud" role="region" aria-label="Turn-by-turn guidance" hidden>
+      <div class="nav-hud-main-card">
+        <div class="nav-maneuver-col">
+          <div id="nav-maneuver-icon" class="nav-maneuver-icon" aria-hidden="true">⬆</div>
+        </div>
+        <div class="nav-instruction-col">
+          <div class="nav-meta-line">
+            <span id="nav-maneuver-dist" class="nav-maneuver-dist">In 45m</span>
+            <span id="nav-gps-pill" class="nav-gps-pill nav-pill-high" title="GPS Accuracy Quality">
+              <span class="gps-dot"></span> <span id="nav-gps-text">GPS: ±5m</span>
+            </span>
+          </div>
+          <div id="nav-maneuver-text" class="nav-maneuver-text">Depart east along Hanover Road</div>
+        </div>
+      </div>
+
+      <!-- Upcoming Accessibility Alert Card (Dedicated inline warning below maneuver card) -->
+      <div id="nav-access-pill" class="nav-access-warning-card" hidden role="alert">
+        <span id="nav-access-icon" class="warning-card-icon" aria-hidden="true">⚠️</span>
+        <div class="warning-card-content">
+          <span id="nav-access-title" class="warning-card-title">Accessibility Notice</span>
+          <span id="nav-access-text" class="warning-card-desc">Steep section ahead · 8% incline for approximately 40
+            m</span>
+        </div>
+      </div>
+
+      <!-- Off-Route Recalculation Alert Banner (Calm, non-aggressive visual treatment) -->
+      <div id="nav-reroute-banner" class="nav-reroute-banner" role="alert" aria-live="assertive" hidden>
+        <div class="reroute-spinner" aria-hidden="true"></div>
+        <div class="reroute-text-group">
+          <span class="reroute-title">Finding another accessible route…</span>
+          <span id="nav-reroute-msg" class="reroute-desc">You're off the planned route. Checking nearby accessible
+            options.</span>
+        </div>
+      </div>
+
+      <!-- Reroute Success Notification -->
+      <div id="nav-reroute-success" class="nav-reroute-success" role="status" aria-live="polite" hidden>
+        <span class="reroute-success-icon" aria-hidden="true">✓</span>
+        <div class="reroute-text-group">
+          <span class="reroute-title">Route updated</span>
+          <span class="reroute-desc">A new accessible route has been found.</span>
+        </div>
+      </div>
+
+      <!-- Unrouteable Conflict Alert in Nav Mode -->
+      <div id="nav-conflict-alert" class="nav-conflict-alert" role="alert" aria-live="assertive" hidden>
+        <span class="conflict-alert-icon" aria-hidden="true">⚠️</span>
+        <div class="conflict-alert-content">
+          <div class="conflict-alert-title">No suitable accessible alternative found</div>
+          <div id="nav-conflict-text" class="conflict-alert-body">We couldn't find another route matching your current
+            accessibility preferences.</div>
+          <div class="conflict-alert-actions">
+            <button type="button" class="btn btn-sm btn-conflict-pref" onclick="openPreferencesModal()">Adjust
+              Preferences</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="dismissNavConflict()">Dismiss</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Recenter Map Button -->
+    <button type="button" id="nav-btn-recenter" class="nav-btn-recenter" onclick="recenterNavMap()"
+      aria-label="Recenter live position on map" hidden>
+      <span class="recenter-icon">🎯</span> Recenter
+    </button>
+
+    <!-- Navigation Mode Bottom HUD Panel (Compact bottom navigation strip) -->
+    <div id="nav-bottom-panel" class="nav-bottom-panel" role="region" aria-label="Live navigation status" hidden>
+      <!-- Stage 14: Subtle Offline Navigation Data Pill -->
+      <div id="nav-offline-status-banner" class="nav-offline-status-pill" hidden role="note">
+        <span class="offline-dot" aria-hidden="true">●</span>
+        <span id="nav-offline-status-text">Offline navigation active · Accessibility information updated</span>
+      </div>
+
+      <!-- Progress Fill Bar -->
+      <div class="nav-progress-track">
+        <div id="nav-progress-fill" class="nav-progress-fill" style="width: 0%;"></div>
+      </div>
+
+      <div class="nav-bottom-main-row">
+        <div class="nav-stat-group stat-time">
+          <span id="nav-stat-remaining-time" class="nav-stat-val">—</span>
+          <span class="nav-stat-lbl">remaining</span>
+        </div>
+        <div class="nav-stat-group stat-dist">
+          <span id="nav-stat-remaining" class="nav-stat-val">—</span>
+          <span class="nav-stat-lbl">distance</span>
+        </div>
+        <div class="nav-stat-group stat-eta">
+          <span id="nav-stat-eta" class="nav-stat-val">—</span>
+          <span class="nav-stat-lbl">ETA</span>
+        </div>
+
+        <div class="nav-primary-action">
+          <button type="button" id="btn-nav-end" class="btn-end-nav-pill" onclick="endNavigation()"
+            aria-label="End live navigation">
+            End Navigation
+          </button>
+        </div>
+      </div>
+
+      <!-- Secondary minimal utility controls -->
+      <div class="nav-secondary-actions">
+        <button type="button" id="btn-nav-report" class="nav-sub-btn" onclick="openNavReportModal()"
+          aria-label="Report issue at current location">
+          <span class="btn-icon">📢</span> <span>Report Issue</span>
+        </button>
+        <button type="button" id="btn-nav-overview" class="nav-sub-btn" onclick="toggleNavOverview()"
+          aria-label="Fit entire route on map">
+          <span class="btn-icon">🗺️</span> <span>Overview</span>
+        </button>
+        <!-- Preserved legacy elements in DOM for tests -->
+        <button type="button" id="btn-nav-steps" style="display: none;" onclick="toggleNavStepsDrawer()"
+          aria-hidden="true">Steps</button>
+        <span id="nav-stat-progress" style="display: none;" aria-hidden="true">0%</span>
+        <span id="nav-stat-completed" style="display: none;" aria-hidden="true">0m</span>
+      </div>
+    </div>
+
+    <!-- Developer / Tester Simulated GPS Toolbar -->
+    <div id="nav-sim-toolbar" class="nav-sim-toolbar" role="region" aria-label="GPS Simulation Controls" hidden>
+      <div class="sim-toolbar-header">
+        <span class="sim-toolbar-title">🧪 GPS Simulator</span>
+        <button type="button" class="sim-toggle-btn" id="btn-toggle-sim-body" onclick="toggleSimToolbar()"
+          aria-label="Toggle simulation tools">▾</button>
+      </div>
+      <div class="sim-toolbar-body" id="sim-toolbar-body">
+        <div class="sim-btn-row">
+          <button type="button" id="btn-sim-play" class="sim-btn sim-btn-play" onclick="toggleSimulatedGPS()">▶ Play
+            Walk</button>
+          <button type="button" id="btn-sim-speed" class="sim-btn" onclick="cycleSimSpeed()">Speed: 1x</button>
+        </div>
+        <div class="sim-btn-row">
+          <button type="button" class="sim-btn" onclick="injectSimulatedJitter()"
+            title="Inject 15m GPS noise to test corridor absorption">Jitter (15m)</button>
+          <button type="button" class="sim-btn" onclick="injectSimulatedDeviation()"
+            title="Diverge 50m off route to trigger rerouting">Deviate (50m)</button>
+          <button type="button" class="sim-btn" onclick="teleportToDestination()"
+            title="Teleport near destination to test arrival">Arrive</button>
+        </div>
+      </div>
+    </div>
+
+    </main>
+
+  </div>
+  </div>
+
+  <!-- Stage 8: Accessible Personal Mobility Preferences Modal -->
+  <dialog id="preferences-modal" class="preferences-dialog" aria-labelledby="pref-dialog-title" aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="pref-dialog-title" class="pref-modal-title">Personal Mobility Preferences</h2>
+          <p class="pref-modal-subtitle">Configure what conditions you want to avoid, tolerate, or prefer. Starting
+            presets are provisional templates, not universal medical advice.</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closePreferencesModal()"
+          aria-label="Close preferences">✕</button>
+      </header>
+
+      <form id="preferences-form" onsubmit="event.preventDefault(); applyPreferences();">
+
+        <!-- Primary Profiles Selector -->
+        <div class="pref-group">
+          <div class="primary-profiles-grid" role="radiogroup" aria-label="Mobility Profile">
+
+            <!-- 1. Manual Wheelchair -->
+            <button type="button" class="preset-btn profile-card active" id="btn-preset-manual_wheelchair"
+              onclick="selectPreset('manual_wheelchair')" aria-checked="true">
+              <div class="profile-card-icon-wrap" aria-hidden="true">♿</div>
+              <div class="profile-card-text">
+                <div class="profile-card-title">Manual Wheelchair</div>
+                <div class="profile-card-desc">For self-propelled wheelchair users</div>
+              </div>
+              <div class="profile-card-check" aria-hidden="true"><span class="check-dot"></span></div>
+            </button>
+
+            <!-- 2. Powered Wheelchair -->
+            <button type="button" class="preset-btn profile-card" id="btn-preset-powered_wheelchair"
+              onclick="selectPreset('powered_wheelchair')" aria-checked="false">
+              <div class="profile-card-icon-wrap" aria-hidden="true">♿</div>
+              <div class="profile-card-text">
+                <div class="profile-card-title">Powered Wheelchair</div>
+                <div class="profile-card-desc">For powered wheelchair users</div>
+              </div>
+              <div class="profile-card-check" aria-hidden="true"><span class="check-dot"></span></div>
+            </button>
+
+            <!-- 3. Mobility Scooter -->
+            <button type="button" class="preset-btn profile-card" id="btn-preset-mobility_scooter"
+              onclick="selectPreset('mobility_scooter')" aria-checked="false">
+              <div class="profile-card-icon-wrap" aria-hidden="true">🛵</div>
+              <div class="profile-card-text">
+                <div class="profile-card-title">Mobility Scooter</div>
+                <div class="profile-card-desc">For mobility scooter users</div>
+              </div>
+              <div class="profile-card-check" aria-hidden="true"><span class="check-dot"></span></div>
+            </button>
+
+            <!-- 4. Walker / Crutches -->
+            <button type="button" class="preset-btn profile-card" id="btn-preset-walker"
+              onclick="selectPreset('walker')" aria-checked="false">
+              <div class="profile-card-icon-wrap" aria-hidden="true">🩼</div>
+              <div class="profile-card-text">
+                <div class="profile-card-title">Walker / Crutches</div>
+                <div class="profile-card-desc">For people using walking aids</div>
+              </div>
+              <div class="profile-card-check" aria-hidden="true"><span class="check-dot"></span></div>
+            </button>
+
+            <!-- 5. Pram / Stroller -->
+            <button type="button" class="preset-btn profile-card" id="btn-preset-pram" onclick="selectPreset('pram')"
+              aria-checked="false">
+              <div class="profile-card-icon-wrap" aria-hidden="true">👶</div>
+              <div class="profile-card-text">
+                <div class="profile-card-title">Pram / Stroller</div>
+                <div class="profile-card-desc">For prams and strollers</div>
+              </div>
+              <div class="profile-card-check" aria-hidden="true"><span class="check-dot"></span></div>
+            </button>
+
+            <!-- 6. Custom Profile -->
+            <button type="button" class="preset-btn profile-card" id="btn-preset-custom"
+              onclick="selectPreset('custom')" aria-checked="false">
+              <div class="profile-card-icon-wrap" aria-hidden="true">⚙</div>
+              <div class="profile-card-text">
+                <div class="profile-card-title">Custom</div>
+                <div class="profile-card-desc">Create your own accessibility preferences</div>
+              </div>
+              <div class="profile-card-check" aria-hidden="true"><span class="check-dot"></span></div>
+            </button>
+
+          </div>
+        </div>
+
+        <!-- Advanced Preferences Disclosure (Preserved Technical Controls) -->
+        <details class="advanced-prefs-disclosure" id="advanced-prefs-disclosure">
+          <summary class="advanced-prefs-summary">
+            <span class="advanced-summary-text">⚙ Advanced accessibility preferences</span>
+            <span class="disclosure-chevron" aria-hidden="true">▾</span>
+          </summary>
+
+          <div class="pref-sections-wrapper" style="margin-top: 14px;">
+
+            <!-- 1. Steps & Stairs -->
+            <div class="pref-card">
+              <h3 class="pref-card-title">Mapped Stairs & Steps</h3>
+              <p class="pref-card-desc">How to treat mapped stairs without ramps:</p>
+              <div class="segmented-options" role="radiogroup" aria-label="Stairs handling">
+                <label class="seg-option">
+                  <input type="radio" name="pref_steps" value="never" onchange="onPrefChange()" checked>
+                  <span class="seg-label">Never use mapped stairs</span>
+                </label>
+                <label class="seg-option">
+                  <input type="radio" name="pref_steps" value="avoid_when_possible" onchange="onPrefChange()">
+                  <span class="seg-label">Avoid when possible</span>
+                </label>
+                <label class="seg-option">
+                  <input type="radio" name="pref_steps" value="allow" onchange="onPrefChange()">
+                  <span class="seg-label">Allow stairs</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 2. Uphill Slope Tolerance -->
+            <div class="pref-card">
+              <h3 class="pref-card-title">Estimated Uphill Slope Limits</h3>
+              <p class="pref-card-desc">Terrain grades are estimated from available elevation data and may not capture
+                short ramps, kerbs, or local surface changes.</p>
+
+              <div class="slider-pair-row">
+                <div class="slider-col">
+                  <div class="slider-label-row">
+                    <label for="pref-slope-pref-range">Preferred Maximum:</label>
+                    <div class="number-input-wrap">
+                      <input type="number" id="pref-slope-pref-num" min="1" max="25" step="0.5" value="4.0"
+                        onchange="syncSlopeInput('pref', 'num')" aria-label="Preferred maximum uphill slope in percent">
+                      <span class="unit">%</span>
+                    </div>
+                  </div>
+                  <input type="range" id="pref-slope-pref-range" min="1" max="20" step="0.5" value="4.0"
+                    oninput="syncSlopeInput('pref', 'range')" aria-label="Preferred maximum uphill slope slider">
+                </div>
+
+                <div class="slider-col">
+                  <div class="slider-label-row">
+                    <label for="pref-slope-max-range">Strict Maximum:</label>
+                    <div class="number-input-wrap">
+                      <input type="number" id="pref-slope-max-num" min="2" max="30" step="0.5" value="8.0"
+                        onchange="syncSlopeInput('max', 'num')" aria-label="Strict maximum uphill slope in percent">
+                      <span class="unit">%</span>
+                    </div>
+                  </div>
+                  <input type="range" id="pref-slope-max-range" min="2" max="30" step="0.5" value="8.0"
+                    oninput="syncSlopeInput('max', 'range')" aria-label="Strict maximum uphill slope slider">
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Surface Preferences -->
+            <div class="pref-card">
+              <h3 class="pref-card-title">Unpaved Surfaces</h3>
+              <p class="pref-card-desc">Gravel, dirt tracks, grass, compacted natural paths:</p>
+              <div class="segmented-options" role="radiogroup" aria-label="Unpaved surfaces">
+                <label class="seg-option">
+                  <input type="radio" name="pref_unpaved" value="allow" onchange="onPrefChange()">
+                  <span class="seg-label">Allow</span>
+                </label>
+                <label class="seg-option">
+                  <input type="radio" name="pref_unpaved" value="prefer_avoid" onchange="onPrefChange()" checked>
+                  <span class="seg-label">Prefer to avoid</span>
+                </label>
+                <label class="seg-option">
+                  <input type="radio" name="pref_unpaved" value="strictly_avoid" onchange="onPrefChange()">
+                  <span class="seg-label">Strictly avoid</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 4. Kerbs & Crossings -->
+            <div class="pref-card">
+              <h3 class="pref-card-title">Kerb & Crossing Preferences</h3>
+
+              <div class="sub-pref-row">
+                <span class="sub-pref-title">Kerb transitions:</span>
+                <div class="segmented-options" role="radiogroup" aria-label="Kerb transitions">
+                  <label class="seg-option">
+                    <input type="radio" name="pref_kerb" value="prefer_lowered" onchange="onPrefChange()">
+                    <span class="seg-label">Prefer lowered/flush</span>
+                  </label>
+                  <label class="seg-option">
+                    <input type="radio" name="pref_kerb" value="avoid_raised" onchange="onPrefChange()" checked>
+                    <span class="seg-label">Avoid recorded raised</span>
+                  </label>
+                  <label class="seg-option">
+                    <input type="radio" name="pref_kerb" value="allow_any" onchange="onPrefChange()">
+                    <span class="seg-label">Allow any</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="sub-pref-row" style="margin-top: 12px;">
+                <span class="sub-pref-title">Unknown kerb information:</span>
+                <p class="pref-card-desc" style="margin-bottom: 6px;">Missing kerb data is never assumed to be lowered
+                  or raised.</p>
+                <div class="segmented-options" role="radiogroup" aria-label="Unknown kerbs handling">
+                  <label class="seg-option">
+                    <input type="radio" name="pref_unknown_kerb" value="allow" onchange="onPrefChange()">
+                    <span class="seg-label">Allow</span>
+                  </label>
+                  <label class="seg-option">
+                    <input type="radio" name="pref_unknown_kerb" value="prefer_avoid" onchange="onPrefChange()" checked>
+                    <span class="seg-label">Prefer known</span>
+                  </label>
+                  <label class="seg-option">
+                    <input type="radio" name="pref_unknown_kerb" value="strictly_avoid" onchange="onPrefChange()">
+                    <span class="seg-label">Strictly avoid</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. Missing Data Tolerance -->
+            <div class="pref-card">
+              <h3 class="pref-card-title">Missing Data Tolerance</h3>
+              <p class="pref-card-desc">Accessibility information in OpenStreetMap is often incomplete:</p>
+              <div class="segmented-options" role="radiogroup" aria-label="Missing data tolerance">
+                <label class="seg-option">
+                  <input type="radio" name="pref_data_confidence" value="flexible" onchange="onPrefChange()">
+                  <span class="seg-label">Flexible (fewer detours)</span>
+                </label>
+                <label class="seg-option">
+                  <input type="radio" name="pref_data_confidence" value="balanced" onchange="onPrefChange()" checked>
+                  <span class="seg-label">Balanced (recommended)</span>
+                </label>
+                <label class="seg-option">
+                  <input type="radio" name="pref_data_confidence" value="cautious" onchange="onPrefChange()">
+                  <span class="seg-label">Cautious (prefers verified data)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 6. Path Width, Barriers, Downhill Slopes, Rough Surfaces -->
+            <!-- Path Width -->
+            <div class="pref-card">
+              <h4 class="pref-card-title">Minimum Path Width</h4>
+              <p class="pref-card-desc">Required physical clearance width along paths:</p>
+              <div class="slider-label-row">
+                <label for="pref-width-num">Minimum clearance:</label>
+                <div class="number-input-wrap">
+                  <input type="number" id="pref-width-num" min="0.5" max="3.0" step="0.1" placeholder="Unset"
+                    onchange="onPrefChange()" aria-label="Minimum path width in meters">
+                  <span class="unit">m</span>
+                </div>
+              </div>
+
+              <div class="sub-pref-row" style="margin-top: 10px;">
+                <span class="sub-pref-title">Narrow paths avoidance:</span>
+                <div class="segmented-options" role="radiogroup" aria-label="Narrow paths avoidance">
+                  <label class="seg-option"><input type="radio" name="pref_narrow" value="allow"
+                      onchange="onPrefChange()" checked><span class="seg-label">Allow</span></label>
+                  <label class="seg-option"><input type="radio" name="pref_narrow" value="prefer_avoid"
+                      onchange="onPrefChange()"><span class="seg-label">Prefer to avoid</span></label>
+                  <label class="seg-option"><input type="radio" name="pref_narrow" value="strictly_avoid"
+                      onchange="onPrefChange()"><span class="seg-label">Strictly avoid</span></label>
+                </div>
+              </div>
+
+              <div class="sub-pref-row" style="margin-top: 10px;">
+                <span class="sub-pref-title">Unknown width data:</span>
+                <div class="segmented-options" role="radiogroup" aria-label="Unknown width handling">
+                  <label class="seg-option"><input type="radio" name="pref_unknown_width" value="allow"
+                      onchange="onPrefChange()" checked><span class="seg-label">Allow</span></label>
+                  <label class="seg-option"><input type="radio" name="pref_unknown_width" value="prefer_avoid"
+                      onchange="onPrefChange()"><span class="seg-label">Prefer known</span></label>
+                  <label class="seg-option"><input type="radio" name="pref_unknown_width" value="strictly_avoid"
+                      onchange="onPrefChange()"><span class="seg-label">Strictly avoid</span></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Barriers -->
+            <div class="pref-card">
+              <h4 class="pref-card-title">Restrictive Physical Barriers</h4>
+              <p class="pref-card-desc">Bollards, turnstiles, cycle chicanes, kissing gates:</p>
+              <div class="segmented-options" role="radiogroup" aria-label="Restrictive barriers">
+                <label class="seg-option"><input type="radio" name="pref_barriers" value="allow"
+                    onchange="onPrefChange()"><span class="seg-label">Allow</span></label>
+                <label class="seg-option"><input type="radio" name="pref_barriers" value="prefer_avoid"
+                    onchange="onPrefChange()"><span class="seg-label">Prefer to avoid</span></label>
+                <label class="seg-option"><input type="radio" name="pref_barriers" value="strictly_avoid"
+                    onchange="onPrefChange()" checked><span class="seg-label">Strictly avoid</span></label>
+              </div>
+            </div>
+
+            <!-- Downhill Slopes -->
+            <div class="pref-card">
+              <h4 class="pref-card-title">Estimated Downhill Slope Limits</h4>
+              <p class="pref-card-desc">Control descent difficulty where wheelchair braking requires caution:</p>
+              <div class="slider-pair-row">
+                <div class="slider-col">
+                  <div class="slider-label-row">
+                    <label for="pref-downhill-pref-range">Preferred Max Downhill:</label>
+                    <div class="number-input-wrap">
+                      <input type="number" id="pref-downhill-pref-num" min="1" max="25" step="0.5" value="6.0"
+                        onchange="syncDownhillInput('pref', 'num')" aria-label="Preferred downhill slope percent">
+                      <span class="unit">%</span>
+                    </div>
+                  </div>
+                  <input type="range" id="pref-downhill-pref-range" min="1" max="20" step="0.5" value="6.0"
+                    oninput="syncDownhillInput('pref', 'range')" aria-label="Preferred downhill slope slider">
+                </div>
+                <div class="slider-col">
+                  <div class="slider-label-row">
+                    <label for="pref-downhill-max-range">Strict Max Downhill:</label>
+                    <div class="number-input-wrap">
+                      <input type="number" id="pref-downhill-max-num" min="2" max="30" step="0.5" value="10.0"
+                        onchange="syncDownhillInput('max', 'num')" aria-label="Strict downhill slope percent">
+                      <span class="unit">%</span>
+                    </div>
+                  </div>
+                  <input type="range" id="pref-downhill-max-range" min="2" max="30" step="0.5" value="10.0"
+                    oninput="syncDownhillInput('max', 'range')" aria-label="Strict downhill slope slider">
+                </div>
+              </div>
+            </div>
+
+            <!-- Rough Surfaces -->
+            <div class="pref-card">
+              <h4 class="pref-card-title">Rough Paved Surfaces</h4>
+              <p class="pref-card-desc">Cobblestones, uneven setts, pavers with wide gaps:</p>
+              <div class="segmented-options" role="radiogroup" aria-label="Rough surfaces">
+                <label class="seg-option"><input type="radio" name="pref_rough" value="allow"
+                    onchange="onPrefChange()"><span class="seg-label">Allow</span></label>
+                <label class="seg-option"><input type="radio" name="pref_rough" value="prefer_avoid"
+                    onchange="onPrefChange()" checked><span class="seg-label">Prefer to avoid</span></label>
+                <label class="seg-option"><input type="radio" name="pref_rough" value="strictly_avoid"
+                    onchange="onPrefChange()"><span class="seg-label">Strictly avoid</span></label>
+              </div>
+            </div>
+
+          </div>
+        </details>
+
+        <!-- Modal Footer Actions -->
+        <footer class="pref-modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="resetPreferencesToDefault()">
+            Reset to Defaults
+          </button>
+          <div class="footer-right-actions">
+            <button type="button" class="btn btn-secondary" onclick="closePreferencesModal()">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" id="btn-save-preferences">
+              Save & Apply Preferences
+            </button>
+          </div>
+        </footer>
+
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Redesigned Consumer Community Accessibility Reporting Sheet / Dialog (Section 3 & 4) -->
+  <dialog id="community-report-modal" class="preferences-dialog community-report-sheet"
+    aria-labelledby="report-modal-title" aria-modal="true">
+    <div class="pref-modal-content report-sheet-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="report-modal-title" class="pref-modal-title">Report an Issue</h2>
+          <p class="pref-modal-subtitle">Help improve real-world accessibility for everyone.</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeCommunityReportModal()"
+          aria-label="Close report dialog">✕</button>
+      </header>
+
+      <!-- Active Form Container -->
+      <form id="community-report-form" onsubmit="event.preventDefault(); submitCommunityReport();">
+
+        <!-- Location Row -->
+        <div class="report-location-strip">
+          <div class="report-location-info">
+            <span class="loc-pin-icon" aria-hidden="true">📍</span>
+            <div class="loc-text-col">
+              <span class="loc-label" id="report-location-label">Selected location</span>
+              <span class="loc-coords-sub" id="report-coords-badge">
+                Lat: <span id="report-lat-text">-37.81360</span>, Lon: <span id="report-lon-text">144.96310</span>
+              </span>
+            </div>
+          </div>
+          <button type="button" class="btn-change-pin" onclick="startCommunityReportMode()"
+            aria-label="Reposition issue pin on map">
+            Choose on Map
+          </button>
+        </div>
+
+        <!-- Step 1: Issue Type (Primary Types Grid - Section 3) -->
+        <div class="report-step-section">
+          <label class="report-section-label">1. What type of issue is this?</label>
+          <div class="report-types-grid" role="radiogroup" aria-label="Issue category">
+            <button type="button" class="report-type-tile active" data-category="path_blocked"
+              onclick="selectReportCategoryTile('path_blocked')">
+              <span class="type-icon" aria-hidden="true">🚧</span>
+              <span class="type-title">Blocked path</span>
+            </button>
+            <button type="button" class="report-type-tile" data-category="lift_status"
+              onclick="selectReportCategoryTile('lift_status')">
+              <span class="type-icon" aria-hidden="true">🛗</span>
+              <span class="type-title">Broken lift</span>
+            </button>
+            <button type="button" class="report-type-tile" data-category="construction"
+              onclick="selectReportCategoryTile('construction')">
+              <span class="type-icon" aria-hidden="true">🏗</span>
+              <span class="type-title">Construction</span>
+            </button>
+            <button type="button" class="report-type-tile" data-category="slope"
+              onclick="selectReportCategoryTile('slope')">
+              <span class="type-icon" aria-hidden="true">⚠️</span>
+              <span class="type-title">Steep section</span>
+            </button>
+            <button type="button" class="report-type-tile" data-category="kerb"
+              onclick="selectReportCategoryTile('kerb')">
+              <span class="type-icon" aria-hidden="true">🚸</span>
+              <span class="type-title">Kerb problem</span>
+            </button>
+            <button type="button" class="report-type-tile" data-category="surface"
+              onclick="selectReportCategoryTile('surface')">
+              <span class="type-icon" aria-hidden="true">🛣</span>
+              <span class="type-title">Surface problem</span>
+            </button>
+            <button type="button" class="report-type-tile" data-category="entrance_accessibility"
+              onclick="selectReportCategoryTile('entrance_accessibility')">
+              <span class="type-icon" aria-hidden="true">🚪</span>
+              <span class="type-title">Entrance issue</span>
+            </button>
+            <button type="button" class="report-type-tile" data-category="other"
+              onclick="selectReportCategoryTile('other')">
+              <span class="type-icon" aria-hidden="true">❓</span>
+              <span class="type-title">Other</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Preserved Hidden Selects for Backward-Compatibility -->
+        <select id="report-category-select" style="display: none;" aria-hidden="true">
+          <option value="path_blocked" selected>Blocked Footpath</option>
+          <option value="lift_status">Elevator / Lift Status</option>
+          <option value="construction">Construction / Roadworks</option>
+          <option value="slope">Slope / Incline</option>
+          <option value="kerb">Kerb Ramp / Transition</option>
+          <option value="surface">Path Surface Material</option>
+          <option value="entrance_accessibility">Entrance Accessibility</option>
+          <option value="stairs">Stairs / Steps</option>
+          <option value="ramp">Wheelchair Ramp</option>
+          <option value="path_width">Path Width / Restriction</option>
+          <option value="barrier">Barrier (Bollard, Gate, Turnstile)</option>
+          <option value="temporary_obstacle">Temporary Obstacle</option>
+          <option value="other">Other Condition</option>
+        </select>
+        <select id="report-value-select" style="display: none;" aria-hidden="true"></select>
+
+        <!-- Step 2: Specific Condition Chips -->
+        <div class="report-step-section" id="report-options-section">
+          <label class="report-section-label" id="report-options-label">2. Condition observed</label>
+          <div class="report-choices-chips" id="report-choices-chips" role="radiogroup"
+            aria-label="Observed condition details">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+
+        <!-- Step 3: Duration & Notes -->
+        <div class="report-meta-row">
+          <div class="report-duration-pills" role="radiogroup" aria-label="Issue duration">
+            <button type="button" class="pill-btn active" id="btn-duration-permanent"
+              onclick="setReportDuration('permanent')">
+              Permanent
+            </button>
+            <button type="button" class="pill-btn" id="btn-duration-temporary" onclick="setReportDuration('temporary')">
+              Temporary / Works
+            </button>
+          </div>
+          <div id="temporary-duration-selector" class="temporary-subgroup" hidden>
+            <select id="report-expected-hours" class="form-select form-select-sm" aria-label="Expected duration">
+              <option value="6">~6 Hours</option>
+              <option value="24" selected>~1 Day</option>
+              <option value="72">~3 Days</option>
+              <option value="168">~1 Week</option>
+              <option value="720">~1 Month</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="report-notes-field">
+          <label for="report-notes-input" class="sr-only">Optional note</label>
+          <input type="text" id="report-notes-input" class="form-input" maxlength="200"
+            placeholder="Optional details (e.g. leaves &lt;80cm clear width)..." />
+        </div>
+
+        <!-- Privacy Hint -->
+        <div class="report-privacy-hint">
+          <span class="privacy-icon" aria-hidden="true">🔒</span>
+          <span>Anonymous · Independent evidence layer preserved with provenance</span>
+        </div>
+
+        <!-- Submit Action -->
+        <div class="pref-modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeCommunityReportModal()">Cancel</button>
+          <button type="submit" id="btn-submit-report" class="btn btn-primary btn-submit-report">Submit Report</button>
+        </div>
+      </form>
+
+      <!-- In-Dialog Confirmation Views (Section 4 - No raw alerts!) -->
+      <div id="report-success-online" class="report-success-view" hidden>
+        <div class="report-success-icon-wrap" aria-hidden="true">✓</div>
+        <h3 class="report-success-title">Report submitted</h3>
+        <p class="report-success-desc">Thank you for helping improve accessibility information.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="closeCommunityReportModal()">Done</button>
+      </div>
+
+      <div id="report-success-offline" class="report-success-view" hidden>
+        <div class="report-success-icon-wrap icon-offline" aria-hidden="true">✓</div>
+        <h3 class="report-success-title">Saved on this device</h3>
+        <p class="report-success-desc">Your report will sync when you're back online.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="closeCommunityReportModal()">Done</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Stage 11 & 13: Destination & Entrance Arrival Modal (Calm, consumer presentation) -->
+  <dialog id="nav-arrival-dialog" class="arrival-dialog" aria-labelledby="arrival-title" aria-modal="true">
+    <div class="arrival-card-content">
+      <div class="arrival-hero-badge">
+        <span class="arrival-badge-icon">✓</span>
+        <span class="arrival-badge-text">You've arrived</span>
+      </div>
+      <h2 id="arrival-title" class="arrival-dest-title">Destination</h2>
+      <p id="arrival-subtitle" class="arrival-dest-sub">You have reached your destination area. Check your immediate
+        surroundings for accessible ramps, kerb cuts, or automatic doors.</p>
+
+      <!-- Stage 13: Factual Entrance Arrival Details -->
+      <div id="arrival-entrance-info" class="arrival-entrance-box" hidden>
+        <div class="arrival-entrance-header">
+          <span class="entrance-check-icon">✓</span>
+          <span id="arrival-entrance-name" class="arrival-entrance-name">Main Entrance</span>
+        </div>
+        <ul id="arrival-entrance-evidence" class="arrival-entrance-evidence">
+          <!-- Populated dynamically -->
+        </ul>
+      </div>
+
+      <div class="arrival-actions">
+        <button type="button" class="btn btn-nav-primary btn-arrival-complete" onclick="closeArrivalModalAndEndNav()">
+          Complete Navigation
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Stage 13: Entrance Community Issue Reporting Modal -->
+  <dialog id="entrance-report-dialog" class="preferences-dialog" aria-labelledby="ent-report-title" aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="ent-report-title" class="pref-modal-title">Report Entrance Issue</h2>
+          <p id="ent-report-subtitle" class="pref-modal-subtitle">Contribute accessibility updates for this entrance.
+          </p>
+        </div>
+        <button type="button" class="btn-pref-close" onclick="closeEntranceReportModal()"
+          aria-label="Close dialog">✕</button>
+      </header>
+      <form id="entrance-report-form" onsubmit="event.preventDefault(); submitEntranceReport();">
+        <div class="pref-field">
+          <label for="ent-report-type" class="pref-field-label">Issue or Update Type</label>
+          <select id="ent-report-type" class="pref-select" required>
+            <option value="step_free">Entrance is step-free</option>
+            <option value="steps_present">Steps present (no ramp)</option>
+            <option value="ramp_present">Ramp bypass present</option>
+            <option value="automatic_door">Automatic power door available</option>
+            <option value="manual_door">Manual door only</option>
+            <option value="temporary_closure">Entrance is temporarily closed</option>
+            <option value="lift_unavailable">Elevator / lift out of service</option>
+            <option value="door_width">Door is narrow (&lt; 0.85m)</option>
+            <option value="threshold_lip">High threshold / raised lip</option>
+            <option value="entrance_inaccessible">Entrance completely inaccessible</option>
+          </select>
+        </div>
+        <div class="pref-field">
+          <label for="ent-report-notes" class="pref-field-label">Details / Description</label>
+          <textarea id="ent-report-notes" class="place-input" rows="3"
+            placeholder="Provide factual details (e.g. 2 concrete steps, heavy pull door)..."
+            style="width: 100%;"></textarea>
+        </div>
+        <div class="pref-field" style="margin-top: 8px;">
+          <label class="pref-checkbox-label">
+            <input type="checkbox" id="ent-report-temporary" />
+            <span>This is a temporary condition (e.g. construction, repair)</span>
+          </label>
+        </div>
+        <div class="pref-modal-footer" style="margin-top: 16px;">
+          <button type="button" class="btn btn-ghost" onclick="closeEntranceReportModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit Entrance Report</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Stage 12: User Authentication & Cloud Sync Modal -->
+  <dialog id="auth-modal" class="preferences-dialog" aria-labelledby="auth-modal-title" aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="auth-modal-title" class="pref-modal-title">AccessRoute Account</h2>
+          <p class="pref-modal-subtitle">Accounts are optional. Navigation is fully anonymous. Sign in to synchronize
+            preferences, saved places, and routes.</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeAuthModal()" aria-label="Close sign in">✕</button>
+      </header>
+
+      <div class="auth-tabs" role="tablist">
+        <button type="button" class="auth-tab-btn active" id="tab-auth-login" onclick="switchAuthMode('login')">Sign
+          In</button>
+        <button type="button" class="auth-tab-btn" id="tab-auth-register" onclick="switchAuthMode('register')">Create
+          Account</button>
+      </div>
+
+      <div id="auth-error-banner" class="auth-error-banner" hidden></div>
+
+      <form id="auth-form" onsubmit="event.preventDefault(); handleAuthSubmit();">
+        <div class="form-group" id="group-auth-name" hidden>
+          <label for="auth-name-input" class="form-label">Full Name (optional)</label>
+          <input type="text" id="auth-name-input" class="form-input" placeholder="e.g. Alex Smith"
+            autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label for="auth-email-input" class="form-label">Email Address</label>
+          <input type="email" id="auth-email-input" class="form-input" required placeholder="alex@example.com"
+            autocomplete="email" />
+        </div>
+
+        <div class="form-group">
+          <label for="auth-password-input" class="form-label">Password</label>
+          <input type="password" id="auth-password-input" class="form-input" required minlength="8"
+            placeholder="At least 8 characters" autocomplete="current-password" />
+        </div>
+
+        <div class="privacy-notice-box" style="margin-top: 14px;">
+          <span class="privacy-icon" aria-hidden="true">🔒</span>
+          <div class="privacy-text">
+            <strong>Privacy Promise:</strong> We never track or store continuous GPS journeys. Mobility preferences are
+            private to your account and never attached to public community reports.
+          </div>
+        </div>
+
+        <div class="pref-modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeAuthModal()">Cancel</button>
+          <button type="submit" id="btn-auth-submit" class="btn btn-primary">Sign In</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Unified Consumer Saved Places & Offline Routes Modal (Section 7 & 18) -->
+  <dialog id="saved-manager-modal" class="preferences-dialog saved-manager-dialog" aria-labelledby="saved-manager-title"
+    aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="saved-manager-title" class="pref-modal-title">Saved & Offline</h2>
+          <p class="pref-modal-subtitle">Access your downloaded routes and saved places on this device.</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeSavedManagerModal()"
+          aria-label="Close saved items">✕</button>
+      </header>
+
+      <!-- Tabs Strip -->
+      <div class="saved-tabs-strip" role="tablist" aria-label="Saved Categories">
+        <button type="button" class="saved-tab-btn active" id="tab-saved-downloaded" role="tab" aria-selected="true"
+          aria-controls="pane-saved-downloaded" onclick="switchSavedManagerTab('downloaded')">
+          <span>📥</span> Downloaded (Offline)
+        </button>
+        <button type="button" class="saved-tab-btn" id="tab-saved-places" role="tab" aria-selected="false"
+          aria-controls="pane-saved-places" onclick="switchSavedManagerTab('places')">
+          <span>📍</span> Saved Places
+        </button>
+        <button type="button" class="saved-tab-btn" id="tab-saved-routes" role="tab" aria-selected="false"
+          aria-controls="pane-saved-routes" onclick="switchSavedManagerTab('routes')">
+          <span>🗺️</span> Saved Corridors
+        </button>
+      </div>
+
+      <!-- Tab 1: Downloaded Routes -->
+      <div id="pane-saved-downloaded" class="saved-tab-pane active" role="tabpanel"
+        aria-labelledby="tab-saved-downloaded">
+        <div id="downloaded-routes-empty" class="saved-empty-state" hidden>
+          <span class="empty-icon" aria-hidden="true">📥</span>
+          <p class="empty-title">No offline routes downloaded yet</p>
+          <p class="empty-desc">Find an accessible route while online, then tap "Download for offline" to navigate
+            without internet connectivity.</p>
+        </div>
+        <ul id="downloaded-routes-list" class="downloaded-routes-list" aria-label="Downloaded offline routes">
+          <!-- Dynamically populated -->
+        </ul>
+      </div>
+
+      <!-- Tab 2: Saved Places -->
+      <div id="pane-saved-places" class="saved-tab-pane" role="tabpanel" aria-labelledby="tab-saved-places" hidden>
+        <div id="saved-places-manager-empty" class="saved-empty-state" hidden>
+          <span class="empty-icon" aria-hidden="true">📍</span>
+          <p class="empty-title">No saved places yet</p>
+          <p class="empty-desc">Save frequently visited destinations for one-tap navigation.</p>
+        </div>
+        <ul id="saved-places-manager-list" class="saved-items-list" aria-label="Saved places">
+          <!-- Dynamically populated -->
+        </ul>
+      </div>
+
+      <!-- Tab 3: Saved Corridors -->
+      <div id="pane-saved-routes" class="saved-tab-pane" role="tabpanel" aria-labelledby="tab-saved-routes" hidden>
+        <div id="saved-routes-manager-empty" class="saved-empty-state" hidden>
+          <span class="empty-icon" aria-hidden="true">🗺️</span>
+          <p class="empty-title">No saved corridors yet</p>
+          <p class="empty-desc">Saved routes will recalculate dynamically with live pedestrian data when reopened.</p>
+        </div>
+        <ul id="saved-routes-manager-list" class="saved-items-list" aria-label="Saved routes">
+          <!-- Dynamically populated -->
+        </ul>
+      </div>
+
+      <footer class="pref-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeSavedManagerModal()">Close</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Stage 12: Saved Places Modal (Preserved for backward compatibility) -->
+  <dialog id="saved-places-modal" class="preferences-dialog" aria-labelledby="places-modal-title" aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="places-modal-title" class="pref-modal-title">Saved Places</h2>
+          <p class="pref-modal-subtitle">Fast shortcuts saved on this device (local private beta).</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeSavedPlacesModal()"
+          aria-label="Close saved places">✕</button>
+      </header>
+
+      <div id="saved-places-empty" class="saved-empty-state" hidden>
+        <span class="empty-icon" aria-hidden="true">📍</span>
+        <p>No saved places on this device yet. Search for a location or click "⭐" next to the destination box to save
+          it.</p>
+      </div>
+
+      <ul id="saved-places-list" class="saved-items-list" aria-label="Saved places list">
+        <!-- Dynamically rendered -->
+      </ul>
+
+      <!-- Save Current Location Form -->
+      <div class="save-new-box">
+        <h3 class="save-new-title">Save a Location</h3>
+        <div class="save-new-row">
+          <input type="text" id="save-place-label" class="form-input" placeholder="Label (e.g. Home, Work, Station)"
+            maxlength="64" />
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleSaveCurrentLocation()">Save Current
+            TO</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Stage 12: Saved Routes Modal -->
+  <dialog id="saved-routes-modal" class="preferences-dialog" aria-labelledby="routes-modal-title" aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="routes-modal-title" class="pref-modal-title">Saved Routes</h2>
+          <p class="pref-modal-subtitle">Corridors saved on this device, recalculated dynamically with current
+            pedestrian data when reopened.</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeSavedRoutesModal()"
+          aria-label="Close saved routes">✕</button>
+      </header>
+
+      <div id="saved-routes-empty" class="saved-empty-state" hidden>
+        <span class="empty-icon" aria-hidden="true">🗺️</span>
+        <p>No saved routes yet. Find a route and click "Save Active Route" to access it quickly later.</p>
+      </div>
+
+      <ul id="saved-routes-list" class="saved-items-list" aria-label="Saved routes list">
+        <!-- Dynamically rendered -->
+      </ul>
+
+      <div class="save-new-box" id="save-active-route-box">
+        <h3 class="save-new-title">Save Current Route</h3>
+        <div class="save-new-row">
+          <input type="text" id="save-route-title" class="form-input" placeholder="Route Name (e.g. Work Commute)"
+            maxlength="128" />
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleSaveActiveRoute()">Save Active
+            Route</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- =================================================================== -->
+  <!-- STAGE 14: PWA, OFFLINE DEVIATION & FIELD SURVEY MODALS             -->
+  <!-- =================================================================== -->
+
+  <!-- Offline Deviation Dialog (No Fake Rerouting) -->
+  <dialog id="nav-offline-deviation-dialog" class="preferences-dialog" aria-labelledby="offline-deviation-title"
+    aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div>
+          <h2 id="offline-deviation-title" class="pref-modal-title" style="color: #f59e0b;">⚠️ Off Downloaded Route</h2>
+          <p class="pref-modal-subtitle">You have moved away from the downloaded accessibility corridor.</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeOfflineDeviationModal()"
+          aria-label="Dismiss deviation notice">✕</button>
+      </header>
+      <div class="dialog-body" style="padding: 16px;">
+        <p style="margin-bottom: 16px; color: #334155; font-size: 0.95rem; line-height: 1.5;">
+          You’re off the downloaded route. A new accessibility-aware route requires an internet connection.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button type="button" class="btn btn-primary" onclick="handleReturnToDownloadedRoute()">Return to
+            Route</button>
+          <button type="button" class="btn btn-secondary" onclick="handleViewRouteOverview()">View Route
+            Overview</button>
+          <button type="button" class="btn btn-outline" onclick="handleRetryRerouteWhenOnline()">Retry When
+            Online</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Field Survey Mode Dialog -->
+  <dialog id="field-survey-dialog" class="preferences-dialog field-survey-dialog" aria-labelledby="field-dialog-title"
+    aria-modal="true">
+    <div class="pref-modal-content field-modal-content">
+      <header class="pref-modal-header">
+        <div class="header-title-row">
+          <span class="header-icon" aria-hidden="true">📋</span>
+          <div>
+            <h2 id="field-dialog-title" class="pref-modal-title">Field Survey Mode</h2>
+            <p class="pref-modal-subtitle">Survey pedestrian infrastructure and verify accessibility gaps offline.</p>
+          </div>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeFieldModeModal()"
+          aria-label="Close field survey">✕</button>
+      </header>
+      <div id="field-mode-content" class="dialog-body field-dialog-body">
+        <!-- Dynamically rendered by field-mode.js -->
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Offline Storage Management Dialog -->
+  <dialog id="storage-manager-modal" class="preferences-dialog" aria-labelledby="storage-dialog-title"
+    aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <div class="header-title-row">
+          <span class="header-icon" aria-hidden="true">💾</span>
+          <div>
+            <h2 id="storage-dialog-title" class="pref-modal-title">Offline Data Management</h2>
+            <p class="pref-modal-subtitle">Manage downloaded routes, verification missions, and cached map data.</p>
+          </div>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeStorageModal()"
+          aria-label="Close storage management">✕</button>
+      </header>
+      <div class="dialog-body" style="padding: 16px;">
+        <div class="storage-summary-card">
+          <div class="storage-stat-row">
+            <span>Downloaded Routes:</span>
+            <strong id="storage-routes-count">0</strong>
+          </div>
+          <div class="storage-stat-row">
+            <span>Offline Missions:</span>
+            <strong id="storage-missions-count">0</strong>
+          </div>
+          <div class="storage-stat-row">
+            <span>Pending Reports to Sync:</span>
+            <strong id="storage-queue-count">0</strong>
+          </div>
+          <div class="storage-stat-row">
+            <span>Estimated Device Storage:</span>
+            <strong id="storage-usage-mb">0.0 MB</strong>
+          </div>
+        </div>
+
+        <h4 style="margin: 16px 0 8px 0; font-size: 0.95rem; font-weight: 600;">Downloaded Routes</h4>
+        <ul id="storage-routes-list" class="storage-routes-list"
+          style="list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto;">
+          <!-- Dynamically populated -->
+        </ul>
+
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-outline btn-danger btn-sm" onclick="handleClearOfflineData()">Clear
+            Downloaded Data</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- iOS PWA Installation Guide Modal -->
+  <dialog id="ios-install-modal" class="preferences-dialog" aria-labelledby="ios-install-title" aria-modal="true">
+    <div class="pref-modal-content">
+      <header class="pref-modal-header">
+        <h2 id="ios-install-title" class="pref-modal-title">Install AccessRoute on iPhone / iPad</h2>
+        <button type="button" class="dialog-close-btn" onclick="closeIOSInstallModal()" aria-label="Close">✕</button>
+      </header>
+      <div class="dialog-body" style="padding: 16px;">
+        <ol class="ios-install-steps" style="line-height: 1.8; padding-left: 20px;">
+          <li>Tap the <strong>Share</strong> button (box with upward arrow) in Safari's bottom toolbar.</li>
+          <li>Scroll down the actions list and tap <strong>Add to Home Screen</strong>.</li>
+          <li>Tap <strong>Add</strong> in the top-right corner.</li>
+        </ol>
+        <p style="margin-top: 12px; font-size: 0.85rem; color: #64748b;">
+          AccessRoute will now be available on your home screen with offline route support and full-screen navigation.
+        </p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Stage 15: "Why This Route?" Consumer Explainability Modal -->
+  <dialog id="why-route-modal" class="why-route-dialog" aria-labelledby="why-modal-title" aria-modal="true">
+    <div class="why-modal-content">
+      <header class="why-modal-header">
+        <div>
+          <div class="why-modal-eyebrow" id="why-modal-eyebrow">ROUTE EXPLAINABILITY</div>
+          <h2 id="why-modal-title" class="why-modal-title">Why this route?</h2>
+          <p class="why-modal-subtitle" id="why-modal-subtitle">Evaluating accessibility evidence against your mobility
+            profile.</p>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeWhyRouteModal()"
+          aria-label="Close explainability dialog">✕</button>
+      </header>
+
+      <div class="why-modal-body" id="why-modal-body">
+
+        <!-- Section 1: Step-Free Access -->
+        <div class="why-section-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">🪜</span>
+            <span class="why-section-title">Step-Free Access</span>
+          </div>
+          <div class="why-evidence-item" id="why-ev-stepfree">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Section 2: Kerbs & Crossings -->
+        <div class="why-section-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">🚸</span>
+            <span class="why-section-title">Kerbs & Crossings</span>
+          </div>
+          <div class="why-evidence-item" id="why-ev-kerbs">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Section 3: Surface & Path Quality -->
+        <div class="why-section-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">🛣️</span>
+            <span class="why-section-title">Surface Conditions</span>
+          </div>
+          <div class="why-evidence-item" id="why-ev-surface">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Section 4: Incline & Terrain -->
+        <div class="why-section-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">⛰️</span>
+            <span class="why-section-title">Incline & Elevation</span>
+          </div>
+          <div class="why-evidence-item" id="why-ev-incline">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Section 5: Path Width & Clearance -->
+        <div class="why-section-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">↔️</span>
+            <span class="why-section-title">Path Width & Clearance</span>
+          </div>
+          <div class="why-evidence-item" id="why-ev-width">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Section 6: Destination & Entrance -->
+        <div class="why-section-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">🚪</span>
+            <span class="why-section-title">Destination & Entrance</span>
+          </div>
+          <div class="why-evidence-item" id="why-ev-entrance">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Section 7: Community Evidence & Verification -->
+        <div class="why-section-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">👥</span>
+            <span class="why-section-title">Community Evidence</span>
+          </div>
+          <div class="why-evidence-item" id="why-ev-community">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Section 8: Data Sources & Provenance -->
+        <div class="why-section-card provenance-card">
+          <div class="why-section-header">
+            <span class="why-section-icon" aria-hidden="true">📡</span>
+            <span class="why-section-title">Data Sources & Provenance</span>
+          </div>
+          <div class="provenance-list">
+            <div class="provenance-item">
+              <strong>OpenStreetMap:</strong> Sidewalk, footway, steps, and kerb geometry.
+            </div>
+            <div class="provenance-item">
+              <strong>Copernicus GLO-30 DEM:</strong> 30m digital elevation model for terrain slopes.
+            </div>
+            <div class="provenance-item">
+              <strong>AccessRoute Community:</strong> Local user verifications and issue reports.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <footer class="why-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeWhyRouteModal()">Close</button>
+        <button type="button" class="btn btn-nav-primary"
+          onclick="closeWhyRouteModal(); startNavigationForActiveRoute();">
+          <span aria-hidden="true">🧭</span> Start Navigation
+        </button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Consumer Toast Notification -->
+  <aside id="consumer-toast" class="consumer-toast" role="status" aria-live="polite" hidden>
+    <span id="toast-icon" class="toast-icon" aria-hidden="true">✓</span>
+    <span id="toast-message" class="toast-message">Notification message</span>
+  </aside>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Stage 14 PWA & Offline Support Modules -->
+  <script src="/static/offline-store.js"></script>
+  <script src="/static/connectivity.js?v=20260929_fix3"></script>
+  <script src="/static/sync-manager.js"></script>
+  <script src="/static/field-mode.js"></script>
+  <script src="/static/pwa-manager.js"></script>
+  <script src="/static/app.js?v=20260929_fix5"></script>
+</body>
+
+</html>

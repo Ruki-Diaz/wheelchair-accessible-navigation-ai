@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "accessroute"
+version = "0.1.0"
+description = "AccessRoute AI: Wheelchair-Accessible Pedestrian Navigation System"
+authors = [
+    { name = "AccessRoute AI Team" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx>=3.2",
+    "osmnx>=2.0.0",
+    "geopandas>=1.0.0",
+    "shapely>=2.0.0",
+    "folium>=0.15.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["accessroute*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
