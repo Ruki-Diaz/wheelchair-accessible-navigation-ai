@@ -10,12 +10,10 @@ import sqlite3
 import threading
 from typing import List, Optional, Tuple
 
+from accessroute.config import DEFAULT_CACHE_DIR
 from accessroute.geocoding.base import GeocodeCandidate
 
-DEFAULT_GEOCODE_CACHE_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "cache"
-)
-DEFAULT_GEOCODE_DB_PATH = DEFAULT_GEOCODE_CACHE_DIR / "geocoding_cache.sqlite"
+DEFAULT_GEOCODE_DB_PATH = DEFAULT_CACHE_DIR / "geocoding_cache.sqlite"
 
 
 class GeocodingCache:

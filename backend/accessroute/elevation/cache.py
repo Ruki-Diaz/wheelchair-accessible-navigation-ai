@@ -9,9 +9,9 @@ import sqlite3
 import threading
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from accessroute.config import DEFAULT_CACHE_DIR
 from accessroute.elevation.base import ElevationProvider, ElevationResult
 
-DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "cache"
 DEFAULT_DB_PATH = DEFAULT_CACHE_DIR / "elevation_cache.sqlite"
 COORDINATE_DECIMALS = 6  # 6 decimal places corresponds to ~0.11m spatial precision
 

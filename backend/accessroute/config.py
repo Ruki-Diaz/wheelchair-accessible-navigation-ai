@@ -1,5 +1,6 @@
 """Configuration settings for AccessRoute AI."""
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -16,9 +17,15 @@ class GeographicArea:
     description: str = ""
 
 
-# Default cache directory location
+# Default cache directory location.
+# ACCESSROUTE_CACHE_DIR env var overrides the default when set.
+# This allows production deployments to redirect caches to a persistent disk mount
+# without any code changes (e.g. ACCESSROUTE_CACHE_DIR=/data/cache).
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_CACHE_DIR = BASE_DIR / "data" / "cache"
+_env_cache_dir = os.environ.get("ACCESSROUTE_CACHE_DIR", "")
+DEFAULT_CACHE_DIR: Path = (
+    Path(_env_cache_dir) if _env_cache_dir else BASE_DIR / "data" / "cache"
+)
 
 # Configured Geographic Areas (Stage 1 uses Vermont South test area)
 AREAS: Dict[str, GeographicArea] = {

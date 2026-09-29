@@ -1,5 +1,8 @@
-# AccessRoute AI - Stage 1 Dependencies
-# Core spatial, graph, and routing libraries
+# AccessRoute AI — Production Runtime Dependencies
+# Verified against actual imports in accessroute package (2026-09-30)
+# Do NOT use `pip freeze` from a development environment to regenerate this file.
+
+# ── Spatial / Graph / Routing ───────────────────────────────────────────────
 networkx>=3.2
 osmnx>=2.0.0
 geopandas>=1.0.0
@@ -8,5 +11,22 @@ folium>=0.15.0
 pandas>=2.0.0
 numpy>=1.24.0
 
-# Testing
+# ── Web Framework ────────────────────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+httpx>=0.27.0
+# python-multipart is NOT required: no file uploads or HTML form endpoints
+
+# ── Database ─────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+
+# ── Authentication ────────────────────────────────────────────────────────────
+bcrypt>=4.0.0
+PyJWT>=2.8.0
+
+# ── Data Validation ───────────────────────────────────────────────────────────
+pydantic>=2.0.0
+
+# ── Testing (dev only) ────────────────────────────────────────────────────────
 pytest>=8.0.0

@@ -14,10 +14,20 @@ venv/
 ENV/
 env/
 
+# Environment variable files — never commit secrets
+.env
+.env.*
+*.env
+
 # OSMnx and Graph Caches
 cache/
 backend/data/cache/*
 !backend/data/cache/.gitkeep
+
+# SQLite / database files — runtime state, not source
+*.db
+*.sqlite
+*.sqlite3
 
 # Development Generated Maps
 dev_maps/

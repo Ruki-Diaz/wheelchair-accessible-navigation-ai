@@ -4,6 +4,7 @@ Exposes RESTful endpoints for accessible pedestrian routing, place geocoding,
 health monitoring, and serves the Stage 6 development browser test interface.
 """
 
+import os
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,15 +58,24 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
 )
 
-# CORS configuration for development
+# CORS configuration
+# ACCESSROUTE_ALLOWED_ORIGINS: comma-separated list of production HTTPS origins.
+# When not set, only localhost origins are allowed (safe development default).
+_DEFAULT_DEV_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+_extra_origins_raw = os.getenv("ACCESSROUTE_ALLOWED_ORIGINS", "")
+_extra_origins = [
+    o.strip() for o in _extra_origins_raw.split(",") if o.strip()
+]
+ALLOWED_ORIGINS = _DEFAULT_DEV_ORIGINS + _extra_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
