@@ -22,6 +22,8 @@ from accessroute.routing.alternatives import calculate_route_alternatives
 
 WESTFIELD_DONCASTER = (-37.7846012, 145.1264394)
 ROSEVILLE_AVENUE = (-37.7832759, 145.129016)
+DALROY_CRESCENT = (-37.85376, 145.17433)
+VERMONT_SOUTH_SHOPPING_CENTRE = (-37.85507, 145.18258)
 
 # Somewhere no prebuilt region covers (Sydney CBD).
 UNCOVERED_BBOX = BoundingBox(south=-33.8700, west=151.2050, north=-33.8650, east=151.2110)
@@ -62,7 +64,7 @@ def _prod_manager(cache: RegionalGraphCache) -> DynamicGraphManager:
 def test_bundled_prebuilt_regions_present_and_enriched():
     cache = RegionalGraphCache(cache_dir=DEFAULT_PREBUILT_REGIONS_DIR, prebuilt_dirs=[])
     regions = {m.region_id: m for m in cache.list_regions()}
-    assert {"reg_561da3e035ef", "reg_549b69abe250"} <= set(regions)
+    assert {"reg_561da3e035ef", "reg_549b69abe250", "reg_03d318127b98"} <= set(regions)
     for meta in regions.values():
         assert meta.accessibility_enriched and meta.terrain_enriched
 
@@ -80,6 +82,18 @@ def test_doncaster_route_uses_prebuilt_graph_with_zero_overpass_requests(prebuil
     assert result.alternatives, "expected at least one accessible route"
     # Nothing was written: the route came entirely from bundled data.
     assert list(prebuilt_cache.cache_dir.glob("*.graphml")) == []
+
+
+def test_vermont_south_route_uses_prebuilt_graph_with_zero_overpass_requests(prebuilt_cache, overpass_forbidden):
+    result = calculate_route_alternatives(
+        origin=DALROY_CRESCENT,
+        destination=VERMONT_SOUTH_SHOPPING_CENTRE,
+        manager=_prod_manager(prebuilt_cache),
+    )
+
+    assert overpass_forbidden.call_count == 0
+    assert result.region_id == "reg_03d318127b98"
+    assert result.alternatives
 
 
 def test_prebuilt_hit_bypasses_provider(prebuilt_cache):

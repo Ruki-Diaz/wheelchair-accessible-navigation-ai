@@ -13,6 +13,7 @@ format as `data/cache/regions/`.
 |---|---|---|---|---|
 | `reg_561da3e035ef` | S -37.788533, W 145.121745, N -37.780123, E 145.133006 | 0.92 km² | 1.9 MB | Westfield Doncaster ↔ Roseville Avenue test route (100 % terrain coverage) |
 | `reg_549b69abe250` | S -37.799413, W 145.117961, N -37.774539, E 145.183211 | 15.8 km² | 15.2 MB | Wider Doncaster / Doncaster East: nearby destinations and region expansion |
+| `reg_03d318127b98` | S -37.868, W 145.160, N -37.845, E 145.196 | 8.1 km² | 12.5 MB | Vermont South / Burwood East incl. Vermont South Shopping Centre (98 % terrain coverage) |
 
 ## Adding a region
 
