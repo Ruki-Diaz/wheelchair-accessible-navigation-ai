@@ -373,12 +373,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (map) map.invalidateSize();
   });
 
-  // Initial Preset loaded into memory but resting search bar remains visible for clean home experience
-  const initialPreset = PRESETS.melbourne;
-  if (initialPreset) {
-    setOrigin(initialPreset.orig[0], initialPreset.orig[1], true, false, initialPreset.origName);
-    setDestination(initialPreset.dest[0], initialPreset.dest[1], true, false, initialPreset.destName);
-  }
+  // Origin and destination start empty: the user chooses both. The map viewport set in
+  // initMap() is only a neutral camera position, never a selected route location.
   collapseSearchDrawer();
 });
 
@@ -1521,6 +1517,7 @@ async function handleFindRoutes() {
   if (btnFind) btnFind.disabled = true;
   if (statusCard) statusCard.hidden = false;
   if (routesContainer) routesContainer.hidden = true;
+  hideRouteUnavailableCard();
   closeSegmentInspector();
 
   // Progressive Status Stages (Calm Overlay)
@@ -1595,7 +1592,9 @@ async function handleFindRoutes() {
         const errJson = await res.json();
         errMsg = errJson.detail || errJson.message || errMsg;
       } catch (_) {}
-      throw new Error(errMsg);
+      const httpError = new Error(errMsg);
+      httpError.status = res.status;
+      throw httpError;
     }
 
     const data = await res.json();
@@ -1604,6 +1603,7 @@ async function handleFindRoutes() {
     const conflictCard = document.getElementById("conflict-card");
     const offlineCard = document.getElementById("offline-search-card");
     if (offlineCard) offlineCard.hidden = true;
+    hideRouteUnavailableCard();
 
     if (!data.found || !data.alternatives || data.alternatives.length === 0) {
       const reasons = (data.blocking_reasons && data.blocking_reasons.length > 0)
@@ -1638,11 +1638,13 @@ async function handleFindRoutes() {
     const offlineCard = document.getElementById("offline-search-card");
     const conflictCard = document.getElementById("conflict-card");
 
-    if (error.name === "AbortError") {
-      if (conflictCard) {
-        displayConstraintConflictCard(["This route is taking longer than expected. Try again or select a closer destination."]);
-      }
-      showConsumerToast("Route calculation timed out", "⏱");
+    if (isRouteDataUnavailableError(error)) {
+      // Upstream map data / infrastructure failure: not an accessibility constraint conflict.
+      displayRouteUnavailableCard();
+      showConsumerToast(
+        error.name === "AbortError" ? "Route calculation timed out" : "Route data temporarily unavailable",
+        error.name === "AbortError" ? "⏱" : "🗺️"
+      );
     } else if (window.AccessRouteConnectivity && !window.AccessRouteConnectivity.isOnline()) {
       if (offlineCard) offlineCard.hidden = false;
       showConsumerToast("You're offline. New accessible routes require a connection.", "📡");
@@ -2802,6 +2804,7 @@ function handleReset() {
   document.getElementById("status-card").hidden = true;
   const conflictCard = document.getElementById("conflict-card");
   if (conflictCard) conflictCard.hidden = true;
+  hideRouteUnavailableCard();
   closeSegmentInspector();
   cancelPinMode();
 
@@ -3141,7 +3144,37 @@ function updatePreferencesSummaryChips() {
   if (presetBadge) presetBadge.textContent = info.name;
 }
 
+// 502/503/504 mean AccessRoute couldn't obtain map data (e.g. Overpass unavailable);
+// a client-side abort means the same from the user's point of view.
+function isRouteDataUnavailableError(error) {
+  if (!error) return false;
+  if (error.name === "AbortError") return true;
+  return error.status === 502 || error.status === 503 || error.status === 504;
+}
+
+function hideRouteUnavailableCard() {
+  const card = document.getElementById("route-unavailable-card");
+  if (card) card.hidden = true;
+}
+
+function displayRouteUnavailableCard() {
+  const card = document.getElementById("route-unavailable-card");
+  const conflictCard = document.getElementById("conflict-card");
+  const routesContainer = document.getElementById("routes-container");
+  if (!card) return;
+
+  if (conflictCard) conflictCard.hidden = true;
+  card.hidden = false;
+  if (routesContainer) routesContainer.hidden = true;
+
+  Object.values(routeLayersMap).forEach((l) => map.removeLayer(l));
+  routeLayersMap = {};
+
+  expandMobileBottomSheet("half");
+}
+
 function displayConstraintConflictCard(reasons) {
+  hideRouteUnavailableCard();
   const card = document.getElementById("conflict-card");
   const list = document.getElementById("conflict-reasons-list");
   const routesContainer = document.getElementById("routes-container");

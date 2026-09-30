@@ -27,7 +27,7 @@
   <meta name="apple-mobile-web-app-title" content="AccessRoute">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
-  <link rel="stylesheet" href="/static/app.css?v=20260929_fix5">
+  <link rel="stylesheet" href="/static/app.css?v=20261001_beta1">
 </head>
 
 <body>
@@ -346,6 +346,23 @@
           <div class="conflict-actions">
             <button type="button" class="btn btn-primary btn-sm" onclick="openPreferencesModal()">
               Adjust Mobility Preferences
+            </button>
+          </div>
+        </section>
+
+        <!-- Route Data Unavailable Card (upstream map data / infrastructure failure) -->
+        <section id="route-unavailable-card" class="conflict-card" role="alert" aria-live="assertive" hidden>
+          <div class="conflict-header">
+            <span class="conflict-icon" aria-hidden="true">🗺️</span>
+            <div class="conflict-title-wrap">
+              <h2 class="conflict-title">Route data temporarily unavailable</h2>
+              <p class="conflict-subtitle">AccessRoute couldn't retrieve the map data needed to calculate this route.
+                Please try again shortly.</p>
+            </div>
+          </div>
+          <div class="conflict-actions">
+            <button type="button" id="btn-route-unavailable-retry" class="btn btn-primary btn-sm" onclick="handleFindRoutes()">
+              Try Again
             </button>
           </div>
         </section>
@@ -1995,7 +2012,7 @@
   <script src="/static/sync-manager.js"></script>
   <script src="/static/field-mode.js"></script>
   <script src="/static/pwa-manager.js"></script>
-  <script src="/static/app.js?v=20260929_fix5"></script>
+  <script src="/static/app.js?v=20261001_beta1"></script>
 </body>
 
 </html>

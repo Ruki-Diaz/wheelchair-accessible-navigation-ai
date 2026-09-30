@@ -1,0 +1,19 @@
+{
+  "region_id": "reg_549b69abe250",
+  "bbox": {
+    "south": -37.799413,
+    "west": 145.117961,
+    "north": -37.774539,
+    "east": 145.183211
+  },
+  "created_at": "2026-09-29T10:54:36.807030+00:00",
+  "node_count": 4783,
+  "edge_count": 13840,
+  "osm_loaded": true,
+  "accessibility_enriched": true,
+  "accessibility_model_version": "2.0",
+  "terrain_enriched": true,
+  "terrain_model_version": "4.0",
+  "graph_format_version": "1.0",
+  "source": "openstreetmap:walk"
+}

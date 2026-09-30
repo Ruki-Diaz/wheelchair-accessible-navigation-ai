@@ -14,6 +14,12 @@ Environment variable:
         Example:
             https://overpass-api.de/api,https://overpass.kumi.systems/api
         When not set, a built-in ordered list of three public mirrors is used.
+    ACCESSROUTE_OVERPASS_TIMEOUT
+        Per-endpoint HTTP timeout in seconds (default 15, capped at 60).
+    ACCESSROUTE_OVERPASS_BUDGET
+        Total wall-clock budget in seconds across all endpoints (default 20).
+        Once spent, remaining endpoints are skipped and NetworkDownloadError is
+        raised, so a consumer never waits for every mirror to time out in turn.
 
 OSMnx 2.1.1 endpoint mechanism (confirmed by source inspection):
     ox.settings.overpass_url is read by _overpass._overpass_request() at
@@ -24,6 +30,7 @@ OSMnx 2.1.1 endpoint mechanism (confirmed by source inspection):
 from abc import ABC, abstractmethod
 import logging
 import os
+import time
 from typing import List, Optional
 import networkx as nx
 import osmnx as ox
@@ -33,6 +40,8 @@ from accessroute.config import (
     ACCESSIBILITY_NODE_TAGS,
     ACCESSIBILITY_WAY_TAGS,
     DEFAULT_OVERPASS_ENDPOINTS,
+    OVERPASS_TIMEOUT_SECONDS,
+    OVERPASS_TOTAL_BUDGET_SECONDS,
 )
 from accessroute.graph.errors import (
     GraphAcquisitionError,
@@ -65,6 +74,10 @@ _INFRASTRUCTURE_EXCEPTIONS = (
     _req_exc.SSLError,          # TLS handshake failure
     ResponseStatusCodeError,    # 429, 5xx from this endpoint
 )
+
+# Don't start an endpoint attempt with less than this much budget left: a
+# near-zero timeout can only fail and would just add another log line.
+_MIN_ATTEMPT_SECONDS = 5.0
 
 
 def _parse_overpass_endpoints() -> List[str]:
@@ -129,22 +142,26 @@ class OpenStreetMapGraphProvider(GraphProvider):
     Configuration
     -------------
     Set ACCESSROUTE_OVERPASS_ENDPOINTS env var to override the default endpoints.
-    Set ACCESSROUTE_OVERPASS_TIMEOUT env var to override the per-request timeout
-    (default: 60 s; the instance constructor value takes precedence).
+    Set ACCESSROUTE_OVERPASS_TIMEOUT / ACCESSROUTE_OVERPASS_BUDGET env vars to
+    override the per-request timeout and total budget (constructor values take
+    precedence).
     """
 
     def __init__(
         self,
-        timeout_seconds: int = 60,
+        timeout_seconds: float = OVERPASS_TIMEOUT_SECONDS,
         endpoints: Optional[List[str]] = None,
+        total_budget_seconds: float = OVERPASS_TOTAL_BUDGET_SECONDS,
     ) -> None:
         """
         Args:
             timeout_seconds: Per-request HTTP timeout for each Overpass attempt.
             endpoints: Explicit endpoint list (overrides env var and defaults).
                        Useful for testing.  Pass an empty list to use defaults.
+            total_budget_seconds: Wall-clock budget across all endpoint attempts.
         """
         self._timeout_seconds = timeout_seconds
+        self._total_budget_seconds = total_budget_seconds
         self._endpoints: List[str] = (
             endpoints if endpoints is not None else _parse_overpass_endpoints()
         )
@@ -187,14 +204,29 @@ class OpenStreetMapGraphProvider(GraphProvider):
         ox.settings.useful_tags_node = list(
             set(ox.settings.useful_tags_node + ACCESSIBILITY_NODE_TAGS)
         )
-        ox.settings.requests_timeout = self._timeout_seconds
         ox.settings.overpass_rate_limit = False
 
         osmnx_bbox = bbox.as_osmnx_bbox()
         endpoint_errors: List[str] = []
         n = len(self._endpoints)
+        started = time.monotonic()
 
         for attempt_idx, endpoint in enumerate(self._endpoints, start=1):
+            # ── Enforce total acquisition budget ──────────────────────────────
+            remaining = self._total_budget_seconds - (time.monotonic() - started)
+            if remaining < _MIN_ATTEMPT_SECONDS:
+                logger.warning(
+                    "Overpass budget of %.0fs exhausted; skipping %d remaining endpoint(s).",
+                    self._total_budget_seconds,
+                    n - attempt_idx + 1,
+                )
+                endpoint_errors.append(
+                    f"budget of {self._total_budget_seconds:.0f}s exhausted before "
+                    f"{n - attempt_idx + 1} endpoint(s) were tried"
+                )
+                break
+            ox.settings.requests_timeout = min(self._timeout_seconds, remaining)
+
             # ── Point OSMnx at this endpoint ──────────────────────────────────
             # ox.settings.overpass_url is read fresh by _overpass._overpass_request()
             # at every call, so assigning here before graph_from_bbox() is safe.
@@ -291,8 +323,15 @@ class OpenStreetMapGraphProvider(GraphProvider):
 
         # All endpoints exhausted without a successful response.
         summary = "; ".join(endpoint_errors)
+        elapsed = time.monotonic() - started
+        tried = sum(1 for e in endpoint_errors if e.startswith("["))
+        headline = (
+            f"All {n} Overpass endpoint(s) failed"
+            if tried == n
+            else f"Overpass budget exhausted after {tried}/{n} endpoint(s)"
+        )
         raise NetworkDownloadError(
-            f"All {n} Overpass endpoint(s) failed for region {bbox.to_dict()}. "
+            f"{headline} for region {bbox.to_dict()} in {elapsed:.1f}s. "
             f"Errors: {summary}"
         )
 

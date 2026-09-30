@@ -6,12 +6,12 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import uuid
 import networkx as nx
 import osmnx as ox
 
-from accessroute.config import DEFAULT_CACHE_DIR
+from accessroute.config import DEFAULT_CACHE_DIR, DEFAULT_PREBUILT_REGIONS_DIR
 from accessroute.graph.errors import CacheCorruptionError
 from accessroute.graph.loader import validate_graph
 from accessroute.graph.region import BoundingBox
@@ -92,15 +92,64 @@ def _sanitize_graph_for_graphml(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
 
 
 class RegionalGraphCache:
-    """Manages on-disk caching, spatial indexing, and atomic writes of regional pedestrian graphs."""
+    """Manages on-disk caching, spatial indexing, and atomic writes of regional pedestrian graphs.
 
-    def __init__(self, cache_dir: Optional[Path] = None) -> None:
+    Besides the writable cache directory, the cache searches read-only *prebuilt*
+    directories holding regional graphs bundled with the application. Prebuilt
+    regions are matched and loaded exactly like cached ones but are never written
+    to or cleared.
+    """
+
+    def __init__(
+        self,
+        cache_dir: Optional[Path] = None,
+        prebuilt_dirs: Optional[Sequence[Path]] = None,
+    ) -> None:
+        """
+        Args:
+            cache_dir: Writable cache directory (defaults to DEFAULT_REGIONAL_CACHE_DIR).
+            prebuilt_dirs: Read-only directories of bundled regional graphs. When None,
+                the bundled DEFAULT_PREBUILT_REGIONS_DIR is used only for the default
+                cache; an explicit cache_dir (e.g. in tests) gets no prebuilt regions.
+        """
         self._cache_dir = Path(cache_dir) if cache_dir else DEFAULT_REGIONAL_CACHE_DIR
         self._cache_dir.mkdir(parents=True, exist_ok=True)
+        if prebuilt_dirs is None:
+            prebuilt_dirs = [] if cache_dir else [DEFAULT_PREBUILT_REGIONS_DIR]
+        self._prebuilt_dirs: List[Path] = [
+            Path(d) for d in prebuilt_dirs if Path(d).resolve() != self._cache_dir.resolve()
+        ]
 
     @property
     def cache_dir(self) -> Path:
         return self._cache_dir
+
+    @property
+    def prebuilt_dirs(self) -> List[Path]:
+        return list(self._prebuilt_dirs)
+
+    def _search_dirs(self) -> List[Path]:
+        """Writable cache first, then prebuilt directories that exist."""
+        return [self._cache_dir] + [d for d in self._prebuilt_dirs if d.is_dir()]
+
+    def _metadata_paths(self) -> List[Path]:
+        return [
+            meta_path
+            for directory in self._search_dirs()
+            for meta_path in directory.glob("*.json")
+            if not meta_path.name.endswith(".tmp.json")
+        ]
+
+    def _locate_region_dir(self, region_id: str) -> Path:
+        """Return the first search directory holding both files for region_id."""
+        for directory in self._search_dirs():
+            if (directory / f"{region_id}.graphml").exists() and (directory / f"{region_id}.json").exists():
+                return directory
+        return self._cache_dir
+
+    def is_prebuilt(self, region_id: str) -> bool:
+        """True when region_id is served from a bundled prebuilt directory."""
+        return self._locate_region_dir(region_id) != self._cache_dir
 
     def find_covering_region(
         self,
@@ -122,10 +171,7 @@ class RegionalGraphCache:
         """
         candidates: List[Tuple[float, str, RegionMetadata]] = []
 
-        for meta_path in self._cache_dir.glob("*.json"):
-            if meta_path.name.endswith(".tmp.json"):
-                continue
-
+        for meta_path in self._metadata_paths():
             try:
                 with open(meta_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -173,8 +219,9 @@ class RegionalGraphCache:
         Raises:
             CacheCorruptionError: If files are missing, unreadable, or corrupted.
         """
-        graph_path = self._cache_dir / f"{region_id}.graphml"
-        meta_path = self._cache_dir / f"{region_id}.json"
+        region_dir = self._locate_region_dir(region_id)
+        graph_path = region_dir / f"{region_id}.graphml"
+        meta_path = region_dir / f"{region_id}.json"
 
         if not graph_path.exists() or not meta_path.exists():
             raise CacheCorruptionError(
@@ -244,11 +291,9 @@ class RegionalGraphCache:
             raise IOError(f"Failed to atomically persist regional graph {region_id}: {exc}") from exc
 
     def list_regions(self) -> List[RegionMetadata]:
-        """List metadata for all valid cached regions."""
+        """List metadata for all valid cached and prebuilt regions."""
         results: List[RegionMetadata] = []
-        for meta_path in self._cache_dir.glob("*.json"):
-            if meta_path.name.endswith(".tmp.json"):
-                continue
+        for meta_path in self._metadata_paths():
             try:
                 with open(meta_path, "r", encoding="utf-8") as f:
                     results.append(RegionMetadata.from_dict(json.load(f)))

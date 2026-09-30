@@ -38,7 +38,12 @@ def small_bbox() -> BoundingBox:
 
 @pytest.fixture()
 def osm_provider() -> OpenStreetMapGraphProvider:
-    return OpenStreetMapGraphProvider(timeout_seconds=10)
+    # Single explicit endpoint: tests in this file don't test failover paths;
+    # they test individual exception semantics. Using one endpoint avoids
+    # the provider exhausting 3 default endpoints on every infrastructure-failure test.
+    return OpenStreetMapGraphProvider(
+        endpoints=["https://primary.example.com/api"], timeout_seconds=5
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -92,16 +97,34 @@ def test_insufficient_response_message_contains_bbox(osm_provider, small_bbox):
 # 3. ResponseStatusCodeError -> NetworkDownloadError
 # ---------------------------------------------------------------------------
 
-def test_response_status_code_error_raises_network_download(osm_provider, small_bbox):
-    """ResponseStatusCodeError (bad HTTP status) must produce NetworkDownloadError."""
-    with patch("osmnx.graph_from_bbox", side_effect=ResponseStatusCodeError("429 Too Many Requests")):
-        with pytest.raises(NetworkDownloadError) as exc_info:
-            osm_provider.get_pedestrian_network(small_bbox)
+def test_response_status_code_error_raises_network_download(small_bbox):
+    """ResponseStatusCodeError (bad HTTP status) must ultimately produce NetworkDownloadError.
 
-    assert exc_info.value.__cause__ is not None
-    assert isinstance(exc_info.value.__cause__, ResponseStatusCodeError)
+    With failover, ResponseStatusCodeError causes the provider to try all endpoints.
+    After all endpoints are exhausted, NetworkDownloadError is raised.
+    Use a single-endpoint provider to verify the direct path.
+    """
+    provider = OpenStreetMapGraphProvider(
+        endpoints=["https://primary.example.com/api"], timeout_seconds=5
+    )
+    with patch(
+        "osmnx.graph_from_bbox",
+        side_effect=ResponseStatusCodeError("429 Too Many Requests"),
+    ):
+        with pytest.raises(NetworkDownloadError):
+            provider.get_pedestrian_network(small_bbox)
+
     # Must NOT be confused with a no-network result
-    assert not isinstance(exc_info.value, NoPedestrianNetworkError)
+    with patch(
+        "osmnx.graph_from_bbox",
+        side_effect=ResponseStatusCodeError("503"),
+    ):
+        try:
+            provider.get_pedestrian_network(small_bbox)
+        except NoPedestrianNetworkError:
+            pytest.fail("ResponseStatusCodeError was misclassified as NoPedestrianNetworkError")
+        except NetworkDownloadError:
+            pass  # Correct
 
 
 # ---------------------------------------------------------------------------

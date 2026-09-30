@@ -1,8 +1,10 @@
 """Dynamic graph acquisition and enrichment manager for arbitrary geographic coordinates."""
 
+from concurrent.futures import Future
 from datetime import datetime, timezone
 import logging
-from typing import Optional, Tuple
+import threading
+from typing import Dict, Optional, Tuple
 import networkx as nx
 
 from accessroute.elevation import (
@@ -27,6 +29,8 @@ from accessroute.graph.regional_cache import (
 
 logger = logging.getLogger(__name__)
 
+_AcquiredGraph = Tuple[nx.MultiDiGraph, RegionMetadata]
+
 
 class DynamicGraphManager:
     """Orchestrates coordinate-driven regional graph discovery, acquisition, enrichment, and caching."""
@@ -42,6 +46,11 @@ class DynamicGraphManager:
         self._elevation_provider = elevation_provider or CachedElevationProvider(
             backend=OpenMeteoElevationProvider()
         )
+        # Single-flight registry: in-process acquisitions currently running, keyed by
+        # region spatial_id. Concurrent requests for a region already being acquired
+        # wait on the leader instead of issuing a duplicate Overpass download.
+        self._inflight_lock = threading.Lock()
+        self._inflight: Dict[str, Tuple[BoundingBox, "Future[_AcquiredGraph]"]] = {}
 
     @property
     def provider(self) -> GraphProvider:
@@ -105,26 +114,79 @@ class DynamicGraphManager:
     ) -> Tuple[nx.MultiDiGraph, RegionMetadata, bool]:
         """Obtain an enriched pedestrian network covering a specific BoundingBox.
 
-        Checks spatial cache, acquires from GraphProvider on miss, normalizes accessibility,
-        optionally enriches terrain, and saves to regional cache.
+        Checks the spatial cache (including bundled prebuilt regions), acquires from
+        GraphProvider on miss, normalizes accessibility, optionally enriches terrain,
+        and saves to regional cache. Concurrent misses for a region already being
+        acquired share that single acquisition (in-process single-flight).
         """
-        # 1. Check regional graph cache
         if not force_refresh:
-            hit = self._cache.find_covering_region(
-                query_bbox=bbox,
-                require_terrain=enrich_elevation,
-            )
+            hit = self._load_covering_region(bbox, enrich_elevation)
             if hit is not None:
-                region_id, meta = hit
-                try:
-                    G, loaded_meta = self._cache.load_graph(region_id)
-                    # Re-attach runtime accessibility model objects if missing from serialized GraphML
-                    enrich_graph_accessibility(G)
-                    return G, loaded_meta, True
-                except Exception as exc:
-                    logger.warning("Cache read failed for region %s: %s. Re-acquiring...", region_id, exc)
+                return hit
 
-        # 2. Cache Miss: Acquire from GraphProvider
+        # Cache miss: join an in-flight acquisition covering this bbox, or lead a new one.
+        with self._inflight_lock:
+            joined = next(
+                (
+                    future
+                    for inflight_bbox, future in self._inflight.values()
+                    if inflight_bbox.contains_box(bbox)
+                ),
+                None,
+            )
+            if joined is None:
+                leader: "Future[_AcquiredGraph]" = Future()
+                self._inflight[bbox.spatial_id] = (bbox, leader)
+
+        if joined is not None:
+            logger.info(
+                "Graph acquisition for bbox %s already in flight; waiting for it instead of re-downloading.",
+                bbox.spatial_id,
+            )
+            G, metadata = joined.result()  # re-raises the leader's error (e.g. NetworkDownloadError)
+            # Each request gets its own graph: routing mutates graphs (community evidence).
+            hit = self._load_covering_region(bbox, enrich_elevation)
+            if hit is not None:
+                return hit
+            return G.copy(), metadata, False
+
+        try:
+            G, metadata = self._acquire_and_cache(bbox, enrich_elevation)
+        except BaseException as exc:
+            leader.set_exception(exc)
+            raise
+        else:
+            # Waiters load their own copy from the cache (or copy this graph if saving failed).
+            leader.set_result((G, metadata))
+            return G, metadata, False
+        finally:
+            with self._inflight_lock:
+                self._inflight.pop(bbox.spatial_id, None)
+
+    def _load_covering_region(
+        self, bbox: BoundingBox, enrich_elevation: bool
+    ) -> Optional[Tuple[nx.MultiDiGraph, RegionMetadata, bool]]:
+        """Load a cached or bundled prebuilt region enclosing bbox, or None on miss."""
+        hit = self._cache.find_covering_region(
+            query_bbox=bbox,
+            require_terrain=enrich_elevation,
+        )
+        if hit is None:
+            return None
+        region_id, _ = hit
+        try:
+            G, loaded_meta = self._cache.load_graph(region_id)
+        except Exception as exc:
+            logger.warning("Cache read failed for region %s: %s. Re-acquiring...", region_id, exc)
+            return None
+        # Re-attach runtime accessibility model objects if missing from serialized GraphML
+        enrich_graph_accessibility(G)
+        if self._cache.is_prebuilt(region_id):
+            logger.info("Serving bbox %s from prebuilt region %s (no external acquisition).", bbox.spatial_id, region_id)
+        return G, loaded_meta, True
+
+    def _acquire_and_cache(self, bbox: BoundingBox, enrich_elevation: bool) -> _AcquiredGraph:
+        """Download, enrich and persist the pedestrian network for bbox."""
         logger.info(
             "Cache miss for bbox %s (area=%.2f km²). Acquiring via %s...",
             bbox.spatial_id,
@@ -133,10 +195,10 @@ class DynamicGraphManager:
         )
         G = self._provider.get_pedestrian_network(bbox)
 
-        # 3. Automatic Stage 2 Accessibility Normalization
+        # Automatic Stage 2 Accessibility Normalization
         enrich_graph_accessibility(G)
 
-        # 4. Optional Stage 4 Elevation & Terrain Enrichment (with graceful failure fallback)
+        # Optional Stage 4 Elevation & Terrain Enrichment (with graceful failure fallback)
         terrain_enriched = False
         if enrich_elevation and self._elevation_provider is not None:
             try:
@@ -154,7 +216,7 @@ class DynamicGraphManager:
                 )
                 terrain_enriched = False
 
-        # 5. Build Metadata & Persist to Cache
+        # Build Metadata & Persist to Cache
         metadata = RegionMetadata(
             region_id=bbox.spatial_id,
             bbox=bbox,
@@ -174,7 +236,7 @@ class DynamicGraphManager:
         except Exception as exc:
             logger.warning("Failed to cache newly acquired region: %s", exc)
 
-        return G, metadata, False
+        return G, metadata
 
 
 # Module-level convenience function

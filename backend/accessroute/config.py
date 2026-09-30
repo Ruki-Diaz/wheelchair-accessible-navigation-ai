@@ -39,6 +39,30 @@ DEFAULT_OVERPASS_ENDPOINTS: List[str] = [
     "https://overpass.private.coffee/api",
 ]
 
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
+
+
+# Overpass request bounds for cold-cache acquisition.
+# ACCESSROUTE_OVERPASS_TIMEOUT: per-endpoint HTTP timeout in seconds (never above 60).
+# ACCESSROUTE_OVERPASS_BUDGET: total wall-clock budget across all endpoints, so a
+# consumer never waits for every mirror to time out in turn. The budget stays
+# below the browser's 25 s route-search abort so the UI receives a clean 502.
+OVERPASS_TIMEOUT_SECONDS: float = min(60.0, _env_float("ACCESSROUTE_OVERPASS_TIMEOUT", 15.0))
+OVERPASS_TOTAL_BUDGET_SECONDS: float = _env_float("ACCESSROUTE_OVERPASS_BUDGET", 20.0)
+
+# Prebuilt regional graphs bundled with the application (read-only, tracked in git).
+# Searched alongside the writable regional cache so covered areas never need Overpass.
+# ACCESSROUTE_PREBUILT_REGIONS_DIR env var overrides the default location.
+_env_prebuilt_dir = os.environ.get("ACCESSROUTE_PREBUILT_REGIONS_DIR", "")
+DEFAULT_PREBUILT_REGIONS_DIR: Path = (
+    Path(_env_prebuilt_dir) if _env_prebuilt_dir else BASE_DIR / "data" / "prebuilt" / "regions"
+)
+
 # Configured Geographic Areas (Stage 1 uses Vermont South test area)
 AREAS: Dict[str, GeographicArea] = {
     "vermont_south": GeographicArea(
